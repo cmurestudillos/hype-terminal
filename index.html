@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>HYPE Terminal</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="terminal-app">
+      <div id="tabs-container">
+        <div id="tabs"></div>
+        <button id="new-tab-button">+</button>
+      </div>
+      <div id="terminals-container"></div>
+    </div>
+
+    <div id="color-customizer" class="color-customizer">
+      <h3>Personalizar Colores</h3>
+      <div class="color-field">
+        <label for="background-color">Color de Fondo:</label>
+        <input type="color" id="background-color" name="background-color" />
+      </div>
+      <div class="color-field">
+        <label for="text-color">Color de Texto:</label>
+        <input type="color" id="text-color" name="text-color" />
+      </div>
+      <div class="color-field">
+        <label for="prompt-color">Color de Prompt:</label>
+        <input type="color" id="prompt-color" name="prompt-color" />
+      </div>
+      <div class="color-field">
+        <label for="selection-color">Color de Selección:</label>
+        <input type="color" id="selection-color" name="selection-color" />
+      </div>
+      <div class="button-row">
+        <button id="apply-colors">Aplicar</button>
+        <button id="cancel-colors">Cancelar</button>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

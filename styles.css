@@ -1,0 +1,277 @@
+:root {
+  /* Variables para temas */
+  --background-color: #1e1e1e;
+  --text-color: #f0f0f0;
+  --prompt-color: #0f0;
+  --selection-color: #585858;
+  --tab-active-color: #383838;
+  --tab-inactive-color: #252525;
+  --tab-hover-color: #4a4a4a;
+  --tab-border-color: #555;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--background-color);
+  font-family: 'Courier New', monospace;
+  color: var(--text-color);
+  transition:
+    background-color 0.3s,
+    color 0.3s;
+}
+
+#terminal-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+}
+
+#tabs-container {
+  display: flex;
+  background-color: var(--background-color);
+  border-bottom: 1px solid var(--tab-border-color);
+  padding: 0;
+  height: 40px;
+}
+
+#tabs {
+  display: flex;
+  flex-grow: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--selection-color) var(--background-color);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  padding: 8px 15px;
+  background-color: var(--tab-inactive-color);
+  color: var(--text-color);
+  border-right: 1px solid var(--tab-border-color);
+  min-width: 100px;
+  max-width: 200px;
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.tab.active {
+  background-color: var(--tab-active-color);
+  border-bottom: 2px solid var(--prompt-color);
+}
+
+.tab:hover {
+  background-color: var(--tab-hover-color);
+}
+
+.tab-title {
+  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-close {
+  margin-left: 8px;
+  font-size: 14px;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  line-height: 16px;
+  border-radius: 50%;
+}
+
+.tab-close:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+#new-tab-button {
+  background-color: transparent;
+  color: var(--text-color);
+  border: none;
+  font-size: 24px;
+  width: 40px;
+  cursor: pointer;
+  outline: none;
+}
+
+#new-tab-button:hover {
+  background-color: var(--tab-hover-color);
+}
+
+#terminals-container {
+  flex-grow: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal-instance {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  flex-direction: column;
+}
+
+.terminal-instance.active {
+  display: flex;
+}
+
+.terminal-output {
+  flex-grow: 1;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  padding: 10px;
+  background-color: var(--background-color);
+  border-bottom: 1px solid var(--selection-color);
+}
+
+.terminal-input-container {
+  display: flex;
+  padding: 10px;
+  background-color: var(--background-color);
+}
+
+.terminal-prompt {
+  color: var(--prompt-color);
+  margin-right: 5px;
+}
+
+.terminal-input {
+  flex-grow: 1;
+  background-color: transparent;
+  border: none;
+  color: var(--text-color);
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  outline: none;
+}
+
+/* Selector de color */
+.color-customizer {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #333;
+  border: 2px solid #666;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  display: none;
+  color: white;
+}
+
+.color-customizer h3 {
+  margin-top: 0;
+  text-align: center;
+  border-bottom: 1px solid #666;
+  padding-bottom: 10px;
+}
+
+.color-field {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.color-field label {
+  margin-right: 10px;
+}
+
+.button-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+}
+
+.button-row button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+#apply-colors {
+  background-color: #4caf50;
+  color: white;
+}
+
+#cancel-colors {
+  background-color: #f44336;
+  color: white;
+}
+
+/* Estilos para temas */
+/* Tema Claro */
+body.theme-light {
+  --background-color: #f5f5f5;
+  --text-color: #333333;
+  --prompt-color: #0066cc;
+  --selection-color: #dddddd;
+  --tab-active-color: #e5e5e5;
+  --tab-inactive-color: #d5d5d5;
+  --tab-hover-color: #ebebeb;
+  --tab-border-color: #cccccc;
+}
+
+/* Tema Monokai */
+body.theme-monokai {
+  --background-color: #272822;
+  --text-color: #f8f8f2;
+  --prompt-color: #a6e22e;
+  --selection-color: #49483e;
+  --tab-active-color: #383830;
+  --tab-inactive-color: #2d2d2a;
+  --tab-hover-color: #3e3d32;
+  --tab-border-color: #75715e;
+}
+
+/* Tema Solarized */
+body.theme-solarized {
+  --background-color: #002b36;
+  --text-color: #839496;
+  --prompt-color: #b58900;
+  --selection-color: #073642;
+  --tab-active-color: #073642;
+  --tab-inactive-color: #002b36;
+  --tab-hover-color: #094352;
+  --tab-border-color: #586e75;
+}
+
+/* Tema Retro */
+body.theme-retro {
+  --background-color: #000000;
+  --text-color: #33ff33;
+  --prompt-color: #ffff33;
+  --selection-color: #006600;
+  --tab-active-color: #001100;
+  --tab-inactive-color: #000800;
+  --tab-hover-color: #002200;
+  --tab-border-color: #00ff00;
+}
+
+/* Tema Hacker */
+body.theme-hacker {
+  --background-color: #0d0208;
+  --text-color: #00ff41;
+  --prompt-color: #00ff41;
+  --selection-color: #003b00;
+  --tab-active-color: #0f0f0f;
+  --tab-inactive-color: #090909;
+  --tab-hover-color: #1a1a1a;
+  --tab-border-color: #00dd00;
+}
