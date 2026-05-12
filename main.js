@@ -1,6 +1,6 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const path = require('path');
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 
@@ -131,6 +131,7 @@ function createWindow() {
   sessions[initialSessionId] = {
     directory: os.homedir(),
     history: [],
+    activeProcess: null,
   };
 
   // Enviar el prompt inicial después de un breve retraso
@@ -150,6 +151,7 @@ ipcMain.on('create-session', (event, sessionId) => {
   sessions[sessionId] = {
     directory: os.homedir(),
     history: [],
+    activeProcess: null,
   };
   sendPromptForSession(sessionId);
 });
@@ -163,6 +165,9 @@ ipcMain.on('switch-session', (event, sessionId) => {
 
 ipcMain.on('close-session', (event, sessionId) => {
   if (sessions[sessionId]) {
+    if (sessions[sessionId].activeProcess) {
+      sessions[sessionId].activeProcess.kill();
+    }
     delete sessions[sessionId];
   }
 });
@@ -240,40 +245,54 @@ ipcMain.on('terminal-command', (event, { command, sessionId }) => {
     return;
   }
 
-  // Para otros comandos, usar exec como antes
-  const shellCmd =
-    process.platform === 'win32'
-      ? { cmd: 'powershell.exe', args: ['-Command', command] }
-      : { cmd: 'bash', args: ['-c', command] };
+  // Ejecutar en el directorio actual con streaming de output en tiempo real
+  const [cmd, ...spawnArgs] =
+    process.platform === 'win32' ? ['powershell.exe', '-Command', command] : ['bash', '-c', command];
 
-  // Ejecutar el comando en el directorio actual de la sesión
-  const childProcess = exec(
-    `${shellCmd.cmd} ${shellCmd.args.join(' ')}`,
-    { cwd: currentDirectory, env: process.env },
-    (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error al ejecutar comando: ${error}`);
-        mainWindow.webContents.send('terminal-output', { sessionId, output: `Error: ${error.message}\r\n` });
-      }
+  const proc = spawn(cmd, spawnArgs, {
+    cwd: currentDirectory,
+    env: process.env,
+    windowsHide: true,
+  });
 
-      if (stdout) {
-        mainWindow.webContents.send('terminal-output', { sessionId, output: stdout });
-      }
+  sessions[sessionId].activeProcess = proc;
 
-      if (stderr) {
-        console.error(`Error estándar: ${stderr}`);
-        mainWindow.webContents.send('terminal-output', { sessionId, output: stderr });
-      }
-
-      // Actualizar el prompt para el siguiente comando
-      sendPromptForSession(sessionId);
+  proc.stdout.on('data', data => {
+    if (mainWindow) {
+      mainWindow.webContents.send('terminal-output', { sessionId, output: data.toString() });
     }
-  );
+  });
+
+  proc.stderr.on('data', data => {
+    if (mainWindow) {
+      mainWindow.webContents.send('terminal-output', { sessionId, output: data.toString() });
+    }
+  });
+
+  proc.on('error', err => {
+    console.error(`Error en proceso: ${err}`);
+    if (mainWindow) {
+      mainWindow.webContents.send('terminal-output', { sessionId, output: `Error: ${err.message}\n` });
+    }
+    if (sessions[sessionId]) {
+      sessions[sessionId].activeProcess = null;
+    }
+    sendPromptForSession(sessionId);
+  });
+
+  proc.on('close', () => {
+    if (sessions[sessionId]) {
+      sessions[sessionId].activeProcess = null;
+    }
+    sendPromptForSession(sessionId);
+  });
 });
 
 // Función para enviar el prompt de una sesión específica
 function sendPromptForSession(sessionId) {
-  if (!sessions[sessionId]) return;
+  if (!mainWindow || !sessions[sessionId]) {
+    return;
+  }
 
   const sessionDir = sessions[sessionId].directory;
   const displayDir = sessionDir.replace(os.homedir(), '~');
@@ -327,7 +346,6 @@ async function getDirectoryCompletions(pathToComplete, currentDirectory) {
     // Determinar la ruta base y el patrón a completar
     let basePath, pattern;
     if (pathToComplete.includes('/') || (process.platform === 'win32' && pathToComplete.includes('\\'))) {
-      const separator = process.platform === 'win32' ? '\\' : '/';
       const lastSepIndex = Math.max(
         pathToComplete.lastIndexOf('/'),
         process.platform === 'win32' ? pathToComplete.lastIndexOf('\\') : -1
@@ -353,7 +371,7 @@ async function getDirectoryCompletions(pathToComplete, currentDirectory) {
     let entries;
     try {
       entries = await readdir(basePath);
-    } catch (error) {
+    } catch (_error) {
       // Si no se puede leer el directorio, devolver una lista vacía
       return [];
     }
@@ -368,7 +386,7 @@ async function getDirectoryCompletions(pathToComplete, currentDirectory) {
           if (stats.isDirectory()) {
             completions.push(`cd ${entry}${path.sep}`); // Añadir separador de path al final
           }
-        } catch (error) {
+        } catch (_error) {
           // Ignorar entradas que no se pueden stat
         }
       }
@@ -391,7 +409,7 @@ async function getFileCompletions(partial, currentDirectory) {
     let entries;
     try {
       entries = await readdir(currentDirectory);
-    } catch (error) {
+    } catch (_error) {
       return [];
     }
 

@@ -105,6 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let completionIndex = -1;
     let originalInput = '';
 
+    // Historial de comandos por pestaña
+    let commandHistory = [];
+    let historyIndex = -1;
+    let historyBuffer = '';
+
     inputElement.addEventListener('keydown', async event => {
       if (event.key === 'Enter') {
         const command = inputElement.value;
@@ -115,16 +120,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Enviar comando al proceso principal
         if (command.trim()) {
+          commandHistory.push(command);
           window.terminal.sendCommand(command, sessionId);
         } else {
-          // Si no hay comando, simplemente muestra el prompt nuevamente
           window.terminal.sendCommand('echo ""', sessionId);
         }
 
-        // Limpiar el input y las sugerencias
+        // Limpiar el input, las sugerencias y el estado del historial
         inputElement.value = '';
         completions = [];
         completionIndex = -1;
+        historyIndex = -1;
+        historyBuffer = '';
       } else if (event.key === 'Tab') {
         // Prevenir que el Tab cambie el foco
         event.preventDefault();
@@ -157,6 +164,34 @@ document.addEventListener('DOMContentLoaded', () => {
           completionIndex = (completionIndex + 1) % completions.length;
           inputElement.value = completions[completionIndex];
         }
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (commandHistory.length === 0) {
+          return;
+        }
+        if (historyIndex === -1) {
+          historyBuffer = inputElement.value;
+          historyIndex = commandHistory.length - 1;
+        } else if (historyIndex > 0) {
+          historyIndex--;
+        }
+        inputElement.value = commandHistory[historyIndex];
+        completions = [];
+        completionIndex = -1;
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (historyIndex === -1) {
+          return;
+        }
+        if (historyIndex < commandHistory.length - 1) {
+          historyIndex++;
+          inputElement.value = commandHistory[historyIndex];
+        } else {
+          historyIndex = -1;
+          inputElement.value = historyBuffer;
+        }
+        completions = [];
+        completionIndex = -1;
       } else {
         // Cualquier otra tecla reinicia las sugerencias
         completions = [];
@@ -167,7 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Agregar event listeners para la pestaña
     tabElement.addEventListener('click', e => {
       // Ignorar si se hizo clic en el botón de cerrar
-      if (e.target.classList.contains('tab-close')) return;
+      if (e.target.classList.contains('tab-close')) {
+        return;
+      }
 
       // Activar esta pestaña
       activateTab(sessionId);
@@ -216,7 +253,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function closeTab(sessionId) {
     const tabIndex = tabs.findIndex(t => t.id === sessionId);
-    if (tabIndex === -1) return;
+    if (tabIndex === -1) {
+      return;
+    }
 
     // Remover elementos del DOM
     tabs[tabIndex].element.remove();
@@ -242,7 +281,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function switchToNextTab() {
-    if (tabs.length <= 1) return;
+    if (tabs.length <= 1) {
+      return;
+    }
 
     const currentIndex = tabs.findIndex(t => t.id === activeTab.id);
     const nextIndex = (currentIndex + 1) % tabs.length;
@@ -250,7 +291,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function switchToPrevTab() {
-    if (tabs.length <= 1) return;
+    if (tabs.length <= 1) {
+      return;
+    }
 
     const currentIndex = tabs.findIndex(t => t.id === activeTab.id);
     const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
@@ -260,19 +303,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // Funciones para manejar la salida de la terminal
   function appendToOutput(sessionId, text) {
     const outputElement = document.getElementById(`output-${sessionId}`);
-    if (!outputElement) return;
-
-    const line = document.createElement('div');
-    line.textContent = text;
-    outputElement.appendChild(line);
-
-    // Hacer scroll hacia abajo
+    if (!outputElement) {
+      return;
+    }
+    const lines = text.split('\n');
+    lines.forEach((line, i) => {
+      if (i === lines.length - 1 && line === '') {
+        return;
+      }
+      const div = document.createElement('div');
+      div.textContent = line;
+      outputElement.appendChild(div);
+    });
     outputElement.scrollTop = outputElement.scrollHeight;
   }
 
   function updatePrompt(sessionId, prompt) {
     const promptElement = document.getElementById(`prompt-${sessionId}`);
-    if (!promptElement) return;
+    if (!promptElement) {
+      return;
+    }
 
     promptElement.textContent = prompt;
 
@@ -287,23 +337,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateTabTitle(sessionId, prompt) {
-    // Extraer el directorio actual del prompt
     let dirName = 'Terminal';
-
-    // Intentar extraer el directorio del prompt
     if (prompt) {
-      const matches = prompt.match(/[^:]+:([^$>]+)/);
-      if (matches && matches[1]) {
-        dirName = matches[1].trim();
-        // Si es muy largo, obtener solo el último segmento
-        if (dirName.length > 15) {
-          const parts = dirName.split('/');
-          dirName = parts[parts.length - 1] || parts[parts.length - 2] || dirName;
+      let dirPath = null;
+      // Windows PS: "PS C:\path\to\dir> " o "PS ~\dir> "
+      const winMatch = prompt.match(/^PS (.+?)>\s*$/);
+      // Unix: "user@host:path$ "
+      const unixMatch = prompt.match(/:(.+?)\$\s*$/);
+      if (winMatch) {
+        dirPath = winMatch[1];
+      } else if (unixMatch) {
+        dirPath = unixMatch[1];
+      }
+      if (dirPath) {
+        dirName = dirPath.trim();
+        if (dirName.length > 20) {
+          const parts = dirName.split(/[\\/]/);
+          dirName = parts.filter(p => p.length > 0).pop() || dirName;
         }
       }
     }
-
-    // Actualizar el título en el objeto y en el DOM
     const tab = tabs.find(t => t.id === sessionId);
     if (tab) {
       tab.title = dirName;
@@ -314,7 +367,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function clearTerminal(sessionId) {
     const outputElement = document.getElementById(`output-${sessionId}`);
-    if (!outputElement) return;
+    if (!outputElement) {
+      return;
+    }
 
     outputElement.innerHTML = '';
   }
@@ -355,7 +410,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Verificar si hay colores personalizados guardados
     const customColors = localStorage.getItem('terminal-custom-colors');
     if (customColors) {
-      applyCustomColors(JSON.parse(customColors));
+      try {
+        applyCustomColors(JSON.parse(customColors));
+      } catch (_e) {
+        localStorage.removeItem('terminal-custom-colors');
+      }
     }
   }
 
@@ -371,7 +430,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Convertir valor RGB a Hex para los inputs de color
   function rgbToHex(rgb) {
     // Si ya es un color hex, devolverlo
-    if (rgb.startsWith('#')) return rgb;
+    if (rgb.startsWith('#')) {
+      return rgb;
+    }
 
     // Extraer valores RGB
     const rgbMatch = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
