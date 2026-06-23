@@ -4,3 +4,8 @@ allowBuilds:
 onlyBuiltDependencies:
   - electron
   - electron-winstaller
+
+overrides:
+  "@electron/get>undici": ^7.28.0
+  form-data: ^4.0.6
+  tar: ^7.5.16
