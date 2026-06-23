@@ -13,11 +13,6 @@
     "package:linux": "electron-builder build --linux"
   },
   "packageManager": "pnpm@11.1.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron"
-    ]
-  },
   "author": "Carlos Mur",
   "license": "MIT",
   "devDependencies": {
