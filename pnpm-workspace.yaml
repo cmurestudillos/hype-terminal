@@ -7,9 +7,11 @@ onlyBuiltDependencies:
 
 overrides:
   "@electron/get>undici": ^7.29.0
-  node-gyp>undici: ^6.27.0
+  node-gyp>undici: ^6.28.0
   form-data: ^4.0.6
   tar: ^7.5.18
-  js-yaml: ~4.3.0
+  js-yaml: ~4.3.1
+  fast-uri: ^3.1.5
   "brace-expansion@5": ^5.0.8
+  "brace-expansion@2": ^2.1.2
   "brace-expansion@1": ^1.1.16
