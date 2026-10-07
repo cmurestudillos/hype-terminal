@@ -21,7 +21,7 @@
     "electron-builder": "^26.15.3",
     "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.1",
-    "eslint-plugin-jsdoc": "^62.0.0",
+    "eslint-plugin-jsdoc": "^65.1.0",
     "eslint-plugin-prettier": "^5.2.3",
     "globals": "^17.6.0",
     "prettier": "^3.5.3"
