@@ -120,6 +120,23 @@ body {
   background-color: var(--tab-hover-color);
 }
 
+#shell-menu-button {
+  background-color: transparent;
+  color: var(--text-color);
+  border: none;
+  font-size: 14px;
+  width: 24px;
+  margin-right: 4px;
+  cursor: pointer;
+  outline: none;
+  opacity: 0.75;
+}
+
+#shell-menu-button:hover {
+  background-color: var(--tab-hover-color);
+  opacity: 1;
+}
+
 #terminals-container {
   flex-grow: 1;
   position: relative;

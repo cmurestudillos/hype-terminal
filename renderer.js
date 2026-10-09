@@ -2,12 +2,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const { Terminal } = window;
   const { FitAddon } = window.FitAddon;
   const { SearchAddon } = window.SearchAddon;
+  const { WebLinksAddon } = window.WebLinksAddon;
   const isMac = navigator.platform.toUpperCase().includes('MAC');
 
   // Referencias a elementos del DOM
   const tabsContainer = document.getElementById('tabs');
   const terminalsContainer = document.getElementById('terminals-container');
   const newTabButton = document.getElementById('new-tab-button');
+  const shellMenuButton = document.getElementById('shell-menu-button');
 
   // Barra de búsqueda (Ctrl+F)
   const searchBar = document.getElementById('search-bar');
@@ -93,6 +95,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let tabs = [];
   let activeTab = null;
   let currentThemeName = 'dark';
+  // Shells disponibles, shell por defecto, restaurar pestañas y carpeta personal (de main)
+  let config = { shells: [], defaultShell: null, restoreTabs: true, home: '', platform: '' };
+  const SESSION_KEY = 'terminal-session';
+  const MAX_RESTORED_TABS = 20;
 
   // Cargar tema guardado
   loadSavedTheme();
@@ -122,12 +128,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Manejar eventos del menú
-  window.terminal.onNewTab(() => handleNewTab());
+  // Los callbacks del puente no deben devolver la pestaña (no se puede clonar entre contextos)
+  window.terminal.onNewTab(shellId => {
+    handleNewTab({ shellId });
+  });
   window.terminal.onCloseTab(() => {
     if (activeTab) {
-      closeTab(activeTab.id);
+      requestCloseTab(activeTab.id);
     }
   });
+  window.terminal.onBusyQuery(() => busyTabTitles());
   window.terminal.onNextTab(() => switchToNextTab());
   window.terminal.onPrevTab(() => switchToPrevTab());
   window.terminal.onRenameTab(() => {
@@ -142,6 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Event listener para el botón de nueva pestaña
   newTabButton.addEventListener('click', () => handleNewTab());
+  shellMenuButton.addEventListener('click', () => {
+    const rect = shellMenuButton.getBoundingClientRect();
+    window.terminal.showShellMenu(rect.left, rect.bottom);
+  });
 
   // Ajustar la terminal visible al tamaño de la ventana
   let fitPending = false;
@@ -156,20 +170,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }).observe(terminalsContainer);
 
-  // Primera pestaña
-  handleNewTab();
+  // Primeras pestañas: las de la sesión anterior o una nueva
+  init();
+
+  async function init() {
+    try {
+      config = await window.terminal.getConfig();
+    } catch (error) {
+      console.error('No se pudo leer la configuración:', error);
+    }
+    if (!(config.restoreTabs && (await restoreSession()))) {
+      handleNewTab();
+    }
+  }
 
   // Funciones para manejar pestañas
   function findTab(sessionId) {
     return tabs.find(t => t.id === sessionId);
   }
 
-  function handleNewTab() {
-    const sessionId = 'session-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-    createNewTab(sessionId);
+  function newSessionId() {
+    return 'session-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
   }
 
-  async function createNewTab(sessionId) {
+  function handleNewTab(options = {}) {
+    return createNewTab(newSessionId(), options);
+  }
+
+  async function createNewTab(sessionId, { shellId = null, cwd = null, customTitle = null } = {}) {
     const tabNumber = tabs.length + 1;
 
     // Crear elemento de pestaña
@@ -195,11 +223,15 @@ document.addEventListener('DOMContentLoaded', () => {
       scrollback: 5000,
       allowProposedApi: true,
       theme: buildXtermTheme(),
+      // Hipervínculos OSC 8 (p. ej. los de ls --hyperlink): mismo criterio que las URLs de texto
+      linkHandler: { activate: openLink },
     });
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
     term.loadAddon(fitAddon);
     term.loadAddon(searchAddon);
+    // URLs de la salida: se abren en el navegador con Ctrl+clic (Cmd+clic en macOS)
+    term.loadAddon(new WebLinksAddon(openLink));
 
     const tab = {
       id: sessionId,
@@ -210,7 +242,16 @@ document.addEventListener('DOMContentLoaded', () => {
       searchAddon,
       title: `Terminal ${tabNumber}`,
       // Nombre puesto por el usuario; si es null, el título sigue al directorio actual
-      customTitle: null,
+      customTitle,
+      shellId,
+      shellName: '',
+      // Directorio actual: el que publica la shell en cada prompt (OSC 9;9 u OSC 7) o, hasta el
+      // primer prompt, el restaurado de la sesión anterior
+      cwd: null,
+      reportedCwd: null,
+      // La shell publica su prompt: se puede saber si hay un comando en marcha
+      reportsPrompt: false,
+      awaitingPrompt: false,
       createdAt: Date.now(),
       exited: false,
     };
@@ -225,9 +266,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     term.attachCustomKeyEventHandler(event => handleTerminalKey(tab, event));
-    term.onData(data => window.terminal.write(sessionId, data));
+    term.onData(data => {
+      // Enter: hasta el siguiente prompt hay un comando en marcha
+      if (data.includes('\r')) {
+        tab.awaitingPrompt = true;
+      }
+      window.terminal.write(sessionId, data);
+    });
     term.onResize(({ cols, rows }) => window.terminal.resize(sessionId, cols, rows));
-    term.onTitleChange(title => updateTabTitle(sessionId, title));
+    // Si la shell publica su directorio, el título sale de ahí; si no, del título que ponga ella
+    term.onTitleChange(title => {
+      if (!tab.cwd) {
+        updateTabTitle(sessionId, title);
+      }
+    });
+    // OSC 9;9;"ruta" (PowerShell, cmd, Git Bash) y OSC 7 file://host/ruta (bash, zsh, fish...)
+    term.parser.registerOscHandler(9, data => {
+      if (!data.startsWith('9;')) {
+        return false;
+      }
+      promptReported(tab, data.slice(2).replace(/^"(.*)"$/, '$1'));
+      return true;
+    });
+    term.parser.registerOscHandler(7, data => {
+      try {
+        const url = new URL(data);
+        let dir = decodeURIComponent(url.pathname);
+        // file:///C:/ruta en Windows
+        if (/^\/[A-Za-z]:/.test(dir)) {
+          dir = dir.slice(1).replace(/\//g, '\\');
+        }
+        promptReported(tab, dir);
+      } catch (_error) {
+        // Secuencia mal formada: se ignora
+      }
+      return true;
+    });
     searchAddon.onDidChangeResults(({ resultIndex, resultCount }) => {
       if (activeTab === tab) {
         updateSearchCount(resultIndex, resultCount);
@@ -264,14 +338,135 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tabElement.querySelector('.tab-close').addEventListener('click', e => {
       e.stopPropagation();
-      closeTab(sessionId);
+      requestCloseTab(sessionId);
     });
 
-    const result = await window.terminal.createPty(sessionId, term.cols, term.rows);
+    renderTabTitle(tab);
+    const result = await window.terminal.createPty(sessionId, term.cols, term.rows, shellId, cwd);
     if (!result.ok) {
       tab.exited = true;
       term.write(`\x1b[31m${result.error}\x1b[0m\r\n`);
+      return tab;
     }
+    tab.shellId = result.shellId;
+    tab.shellName = result.shellName;
+    tab.cwd = tab.cwd || cwd;
+    renderTabTitle(tab);
+    saveSession();
+    return tab;
+  }
+
+  function openLink(event, uri) {
+    if (event.ctrlKey || event.metaKey) {
+      window.terminal.openExternal(uri);
+    }
+  }
+
+  // La shell ha mostrado su prompt en el directorio dir
+  function promptReported(tab, dir) {
+    tab.reportsPrompt = true;
+    tab.awaitingPrompt = false;
+    if (!dir || dir === tab.reportedCwd) {
+      return;
+    }
+    tab.reportedCwd = dir;
+    tab.cwd = dir;
+    updateTabTitle(tab.id, abbreviateHome(dir));
+    saveSession();
+  }
+
+  // C:\Users\ana\src → ~\src (sin distinguir mayúsculas en Windows)
+  function abbreviateHome(dir) {
+    const home = config.home;
+    if (!home) {
+      return dir;
+    }
+    const insensitive = config.platform === 'win32';
+    const a = insensitive ? dir.toLowerCase() : dir;
+    const h = insensitive ? home.toLowerCase() : home;
+    if (a === h) {
+      return '~';
+    }
+    if (a.startsWith(h) && /[\\/]/.test(dir[home.length])) {
+      return '~' + dir.slice(home.length);
+    }
+    return dir;
+  }
+
+  // ¿Tiene la pestaña un comando en marcha?
+  async function isTabBusy(tab) {
+    if (tab.exited) {
+      return false;
+    }
+    if (tab.reportsPrompt) {
+      return tab.awaitingPrompt;
+    }
+    // Shells que no publican su prompt (zsh...): proceso en primer plano (macOS/Linux)
+    return (await window.terminal.foregroundBusy(tab.id)) === true;
+  }
+
+  async function busyTabTitles() {
+    const result = [];
+    for (const tab of tabs) {
+      if (await isTabBusy(tab)) {
+        result.push(tab.customTitle || tab.title);
+      }
+    }
+    return result;
+  }
+
+  // Cerrar desde la interfaz: si hay un comando en marcha, pedir confirmación
+  async function requestCloseTab(sessionId) {
+    const tab = findTab(sessionId);
+    if (!tab) {
+      return;
+    }
+    if ((await isTabBusy(tab)) && !(await window.terminal.confirmCloseTab(tab.customTitle || tab.title))) {
+      tab.term.focus();
+      return;
+    }
+    closeTab(sessionId);
+  }
+
+  // Guardar las pestañas abiertas (shell, directorio y nombre) para restaurarlas al volver a abrir
+  function saveSession() {
+    const state = {
+      tabs: tabs.map(t => ({ shellId: t.shellId, cwd: t.cwd, customTitle: t.customTitle })),
+      active: Math.max(0, tabs.indexOf(activeTab)),
+    };
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(state));
+    } catch (_error) {
+      // Almacenamiento no disponible: no se restaurará
+    }
+  }
+
+  async function restoreSession() {
+    let state;
+    try {
+      state = JSON.parse(localStorage.getItem(SESSION_KEY));
+    } catch (_error) {
+      return false;
+    }
+    if (!state || !Array.isArray(state.tabs) || state.tabs.length === 0) {
+      return false;
+    }
+    const saved = state.tabs.slice(0, MAX_RESTORED_TABS);
+    const created = [];
+    for (const t of saved) {
+      created.push(
+        await createNewTab(newSessionId(), {
+          shellId: typeof t.shellId === 'string' ? t.shellId : null,
+          cwd: typeof t.cwd === 'string' ? t.cwd : null,
+          customTitle: typeof t.customTitle === 'string' && t.customTitle ? t.customTitle.slice(0, 40) : null,
+        })
+      );
+    }
+    const active = created[Number.isInteger(state.active) ? state.active : 0];
+    if (active) {
+      activateTab(active.id);
+    }
+    return true;
   }
 
   // Atajos que no deben llegar a la shell: los gestiona el menú de la aplicación
@@ -317,6 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
       closeSearch(false);
       fitActiveTab();
       tab.term.focus();
+      saveSession();
     }
   }
 
@@ -341,6 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tab.element.remove();
     tab.terminal.remove();
     tabs.splice(tabIndex, 1);
+    saveSession();
 
     // Si era la pestaña activa, activar otra
     if (activeTab && activeTab.id === sessionId) {
@@ -390,7 +587,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const titleElement = tab.element.querySelector('.tab-title');
     const fullTitle = tab.fullTitle || tab.title;
     titleElement.textContent = tab.customTitle || tab.title;
-    titleElement.title = tab.customTitle ? `${tab.customTitle} — ${fullTitle}` : fullTitle;
+    const tooltip = tab.customTitle ? `${tab.customTitle} — ${fullTitle}` : fullTitle;
+    titleElement.title = tab.shellName ? `${tooltip} · ${tab.shellName}` : tooltip;
   }
 
   // Renombrar una pestaña: Enter guarda, Escape cancela; un nombre vacío vuelve al título automático
@@ -419,6 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
       finished = true;
       if (save) {
         tab.customTitle = input.value.trim() || null;
+        saveSession();
       }
       input.remove();
       titleElement.hidden = false;
