@@ -132,7 +132,7 @@ function createWindow() {
     sessions[initialSessionId] = {
       directory: os.homedir(),
       history: [],
-      activeProcess: null,
+      processes: new Set(),
     };
     mainWindow.webContents.send('initial-session', initialSessionId);
     sendPromptForSession(initialSessionId);
@@ -153,12 +153,38 @@ ipcMain.on('set-custom-colors', (event, colors) => {
   sendToWindow('apply-custom-colors', colors);
 });
 
-// Cerrar una sesión y terminar su comando en curso
+// Terminar un comando y todos sus descendientes. proc.kill() solo mata powershell/bash:
+// un "ping -t" o un servidor lanzado desde ellos seguiría vivo.
+function killProcessTree(proc) {
+  if (proc.exitCode !== null || proc.signalCode !== null) {
+    return;
+  }
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true });
+    } else {
+      // El proceso se lanza como líder de su propio grupo (detached): se señaliza el grupo entero
+      process.kill(-proc.pid, 'SIGKILL');
+    }
+  } catch (_error) {
+    proc.kill();
+  }
+}
+
+// Interrumpir los comandos en curso de una sesión (Ctrl+C). Devuelve si había alguno.
+function interruptSession(sessionId) {
+  const session = sessions[sessionId];
+  if (!session || session.processes.size === 0) {
+    return false;
+  }
+  session.processes.forEach(killProcessTree);
+  return true;
+}
+
+// Cerrar una sesión y terminar sus comandos en curso
 function closeSession(sessionId) {
   if (sessions[sessionId]) {
-    if (sessions[sessionId].activeProcess) {
-      sessions[sessionId].activeProcess.kill();
-    }
+    interruptSession(sessionId);
     delete sessions[sessionId];
   }
 }
@@ -177,7 +203,7 @@ ipcMain.on('create-session', (event, sessionId) => {
   sessions[sessionId] = {
     directory: os.homedir(),
     history: [],
-    activeProcess: null,
+    processes: new Set(),
   };
   sendPromptForSession(sessionId);
 });
@@ -192,6 +218,8 @@ ipcMain.on('switch-session', (event, sessionId) => {
 ipcMain.on('close-session', (event, sessionId) => {
   closeSession(sessionId);
 });
+
+ipcMain.handle('interrupt-session', (event, sessionId) => interruptSession(sessionId));
 
 // Recibir comandos del renderer, ahora con sesiones
 ipcMain.on('terminal-command', (event, { command, sessionId }) => {
@@ -283,13 +311,15 @@ ipcMain.on('terminal-command', (event, { command, sessionId }) => {
     cwd: currentDirectory,
     env: process.platform === 'win32' ? { ...process.env, HYPE_COMMAND: command } : process.env,
     windowsHide: true,
+    // En Unix, grupo de procesos propio para poder interrumpir el comando con todos sus hijos
+    detached: process.platform !== 'win32',
   });
 
   // Decodificar como texto con estado: un carácter multibyte partido entre dos trozos no se corrompe
   proc.stdout.setEncoding('utf8');
   proc.stderr.setEncoding('utf8');
 
-  sessions[sessionId].activeProcess = proc;
+  sessions[sessionId].processes.add(proc);
 
   proc.stdout.on('data', data => {
     if (mainWindow) {
@@ -309,14 +339,14 @@ ipcMain.on('terminal-command', (event, { command, sessionId }) => {
       mainWindow.webContents.send('terminal-output', { sessionId, output: `Error: ${err.message}\n` });
     }
     if (sessions[sessionId]) {
-      sessions[sessionId].activeProcess = null;
+      sessions[sessionId].processes.delete(proc);
     }
     sendPromptForSession(sessionId);
   });
 
   proc.on('close', () => {
     if (sessions[sessionId]) {
-      sessions[sessionId].activeProcess = null;
+      sessions[sessionId].processes.delete(proc);
     }
     sendPromptForSession(sessionId);
   });

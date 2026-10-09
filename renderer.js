@@ -138,6 +138,23 @@ document.addEventListener('DOMContentLoaded', () => {
         completionIndex = -1;
         historyIndex = -1;
         historyBuffer = '';
+      } else if (event.key.toLowerCase() === 'c' && event.ctrlKey && !event.shiftKey && !event.altKey) {
+        // Ctrl+C con texto seleccionado copia (atajo del menú); sin selección interrumpe el comando
+        const hasSelection =
+          window.getSelection().toString() !== '' || inputElement.selectionStart !== inputElement.selectionEnd;
+        if (hasSelection) {
+          return;
+        }
+        event.preventDefault();
+        const promptElement = document.getElementById(`prompt-${sessionId}`);
+        const interrupted = await window.terminal.interrupt(sessionId);
+        // Como en bash/PowerShell: ^C y, si no había nada en marcha, se descarta la línea escrita
+        appendToOutput(sessionId, interrupted ? '^C' : `${promptElement.textContent}${inputElement.value}^C`);
+        inputElement.value = '';
+        completions = [];
+        completionIndex = -1;
+        historyIndex = -1;
+        historyBuffer = '';
       } else if (event.key === 'Tab' && (event.ctrlKey || event.metaKey || event.altKey)) {
         // Ctrl+Tab / Ctrl+Shift+Tab: no bloquear el evento para que lleguen los atajos del menú
         return;

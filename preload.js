@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('terminal', {
   closeSession: sessionId => {
     ipcRenderer.send('close-session', sessionId);
   },
+  interrupt: sessionId => {
+    return ipcRenderer.invoke('interrupt-session', sessionId);
+  },
   onInitialSession: callback => {
     ipcRenderer.once('initial-session', (event, sessionId) => {
       callback(sessionId);
