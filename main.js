@@ -99,6 +99,11 @@ function createWindow() {
           accelerator: 'CmdOrCtrl+W',
           click: () => sendToWindow('close-tab'),
         },
+        {
+          label: 'Renombrar Pestaña',
+          accelerator: 'F2',
+          click: () => sendToWindow('rename-tab'),
+        },
         { type: 'separator' },
         {
           label: 'Pestaña Siguiente',

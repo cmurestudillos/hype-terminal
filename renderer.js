@@ -63,6 +63,12 @@ document.addEventListener('DOMContentLoaded', () => {
     switchToPrevTab();
   });
 
+  window.terminal.onRenameTab(() => {
+    if (activeTab) {
+      startRenameTab(activeTab.id);
+    }
+  });
+
   // Event listener para el botón de nueva pestaña
   newTabButton.addEventListener('click', handleNewTab);
 
@@ -227,13 +233,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Agregar event listeners para la pestaña
     tabElement.addEventListener('click', e => {
-      // Ignorar si se hizo clic en el botón de cerrar
-      if (e.target.classList.contains('tab-close')) {
+      // Ignorar si se hizo clic en el botón de cerrar o en el campo de renombrar
+      if (e.target.classList.contains('tab-close') || e.target.classList.contains('tab-rename')) {
         return;
       }
 
       // Activar esta pestaña
       activateTab(sessionId);
+    });
+
+    // Doble clic para renombrar la pestaña
+    tabElement.addEventListener('dblclick', e => {
+      if (!e.target.classList.contains('tab-close')) {
+        startRenameTab(sessionId);
+      }
     });
 
     const closeButton = tabElement.querySelector('.tab-close');
@@ -248,6 +261,8 @@ document.addEventListener('DOMContentLoaded', () => {
       element: tabElement,
       terminal: terminalInstance,
       title: `Terminal ${tabNumber}`,
+      // Nombre puesto por el usuario; si es null, el título sigue al directorio actual
+      customTitle: null,
     });
 
     // Activar esta pestaña
@@ -399,9 +414,61 @@ document.addEventListener('DOMContentLoaded', () => {
     const tab = tabs.find(t => t.id === sessionId);
     if (tab) {
       tab.title = dirName;
-      const titleElement = tab.element.querySelector('.tab-title');
-      titleElement.textContent = dirName;
+      renderTabTitle(tab);
     }
+  }
+
+  function renderTabTitle(tab) {
+    const titleElement = tab.element.querySelector('.tab-title');
+    titleElement.textContent = tab.customTitle || tab.title;
+    titleElement.title = tab.customTitle ? `${tab.customTitle} — ${tab.title}` : tab.title;
+  }
+
+  // Renombrar una pestaña: Enter guarda, Escape cancela; un nombre vacío vuelve al título automático
+  function startRenameTab(sessionId) {
+    const tab = tabs.find(t => t.id === sessionId);
+    if (!tab || tab.element.querySelector('.tab-rename')) {
+      return;
+    }
+    const titleElement = tab.element.querySelector('.tab-title');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-rename';
+    input.maxLength = 40;
+    input.value = tab.customTitle || tab.title;
+    input.setAttribute('aria-label', 'Nombre de la pestaña');
+    titleElement.hidden = true;
+    tab.element.insertBefore(input, titleElement);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = save => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      if (save) {
+        tab.customTitle = input.value.trim() || null;
+      }
+      input.remove();
+      titleElement.hidden = false;
+      renderTabTitle(tab);
+      if (activeTab && activeTab.id === sessionId) {
+        document.getElementById(`input-${sessionId}`).focus();
+      }
+    };
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
   }
 
   function clearTerminal(sessionId) {

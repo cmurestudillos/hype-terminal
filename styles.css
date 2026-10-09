@@ -79,6 +79,19 @@ body {
   text-overflow: ellipsis;
 }
 
+.tab-rename {
+  flex-grow: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 1px 4px;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  border: 1px solid var(--prompt-color);
+  border-radius: 3px;
+  font: inherit;
+  outline: none;
+}
+
 .tab-close {
   margin-left: 8px;
   font-size: 14px;

@@ -58,6 +58,10 @@ contextBridge.exposeInMainWorld('terminal', {
     ipcRenderer.removeAllListeners('prev-tab');
     ipcRenderer.on('prev-tab', callback);
   },
+  onRenameTab: callback => {
+    ipcRenderer.removeAllListeners('rename-tab');
+    ipcRenderer.on('rename-tab', callback);
+  },
   changeTheme: callback => {
     ipcRenderer.removeAllListeners('change-theme');
     ipcRenderer.on('change-theme', (event, themeName) => {
