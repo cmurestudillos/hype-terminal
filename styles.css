@@ -275,3 +275,8 @@ body.theme-hacker {
   --tab-hover-color: #1a1a1a;
   --tab-border-color: #00dd00;
 }
+
+/* Color de selección configurable (temas y personalizador) */
+::selection {
+  background-color: var(--selection-color);
+}

@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyColorsButton = document.getElementById('apply-colors');
   const cancelColorsButton = document.getElementById('cancel-colors');
 
+  const THEMES = ['dark', 'light', 'monokai', 'solarized', 'retro', 'hacker'];
+  const CUSTOM_PROPERTIES = ['--background-color', '--text-color', '--prompt-color', '--selection-color'];
+
   // Cargar tema guardado
   loadSavedTheme();
 
@@ -409,9 +412,13 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
     // Si no es "dark" (default), añadir la clase adecuada
-    if (themeName !== 'dark') {
+    if (THEMES.includes(themeName) && themeName !== 'dark') {
       document.body.classList.add(`theme-${themeName}`);
     }
+
+    // Un tema predefinido descarta los colores personalizados: si no, al elegir
+    // "Oscuro" se seguían viendo los colores personalizados
+    clearCustomColors();
 
     // Guardar preferencia
     localStorage.setItem('terminal-theme', themeName);
@@ -423,24 +430,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cargar tema guardado
   function loadSavedTheme() {
     const savedTheme = localStorage.getItem('terminal-theme');
-    if (savedTheme) {
-      changeTheme(savedTheme);
-    }
-
-    // Verificar si hay colores personalizados guardados
     const customColors = localStorage.getItem('terminal-custom-colors');
-    if (customColors) {
+
+    if (savedTheme === 'custom' && customColors) {
       try {
         applyCustomColors(JSON.parse(customColors));
       } catch (_e) {
         localStorage.removeItem('terminal-custom-colors');
       }
+    } else if (THEMES.includes(savedTheme)) {
+      changeTheme(savedTheme);
     }
+  }
+
+  // Quitar los colores personalizados aplicados y guardados
+  function clearCustomColors() {
+    CUSTOM_PROPERTIES.forEach(prop => document.documentElement.style.removeProperty(prop));
+    localStorage.removeItem('terminal-custom-colors');
   }
 
   // Actualizar los inputs de color con los valores actuales de CSS
   function updateColorInputs() {
-    const computedStyle = getComputedStyle(document.documentElement);
+    // Los temas definen sus variables en <body>: leerlas de ahí y no de <html>
+    const computedStyle = getComputedStyle(document.body);
     backgroundColorInput.value = rgbToHex(computedStyle.getPropertyValue('--background-color').trim());
     textColorInput.value = rgbToHex(computedStyle.getPropertyValue('--text-color').trim());
     promptColorInput.value = rgbToHex(computedStyle.getPropertyValue('--prompt-color').trim());
@@ -449,7 +461,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Convertir valor RGB a Hex para los inputs de color
   function rgbToHex(rgb) {
-    // Si ya es un color hex, devolverlo
+    // Si ya es un color hex, devolverlo (expandiendo #0f0 → #00ff00, que el input de color no acepta)
+    if (/^#[0-9a-f]{3}$/i.test(rgb)) {
+      return '#' + [...rgb.slice(1)].map(c => c + c).join('');
+    }
     if (rgb.startsWith('#')) {
       return rgb;
     }
