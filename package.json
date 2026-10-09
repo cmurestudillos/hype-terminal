@@ -32,16 +32,43 @@
     "directories": {
       "output": "release/"
     },
+    "files": [
+      "**/*",
+      "!docs{,/**/*}",
+      "!.github{,/**/*}",
+      "!.vscode{,/**/*}",
+      "!release{,/**/*}"
+    ],
+    "asarUnpack": [
+      "**/node_modules/node-pty/**"
+    ],
+    "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "cmurestudillos",
+      "repo": "hype-terminal",
+      "releaseType": "draft"
+    },
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "assets/icon.icns"
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
     },
     "win": {
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "target": "nsis"
     },
     "linux": {
       "icon": "assets/icon.png",
-      "category": "Development"
+      "category": "Development",
+      "target": "AppImage"
     }
   },
   "dependencies": {
