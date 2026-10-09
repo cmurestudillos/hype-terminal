@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="terminal-output" id="output-${sessionId}"></div>
       <div class="terminal-input-container">
         <span class="terminal-prompt" id="prompt-${sessionId}"></span>
-        <input type="text" class="terminal-input" id="input-${sessionId}" autofocus>
+        <input type="text" class="terminal-input" id="input-${sessionId}">
       </div>
     `;
     terminalsContainer.appendChild(terminalInstance);
@@ -135,6 +135,9 @@ document.addEventListener('DOMContentLoaded', () => {
         completionIndex = -1;
         historyIndex = -1;
         historyBuffer = '';
+      } else if (event.key === 'Tab' && (event.ctrlKey || event.metaKey || event.altKey)) {
+        // Ctrl+Tab / Ctrl+Shift+Tab: no bloquear el evento para que lleguen los atajos del menú
+        return;
       } else if (event.key === 'Tab') {
         // Prevenir que el Tab cambie el foco
         event.preventDefault();
