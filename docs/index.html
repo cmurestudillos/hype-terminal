@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="es" data-theme="auto">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HYPE Terminal — Terminal con pestañas para Windows, macOS y Linux</title>
+    <meta
+      name="description"
+      content="Terminal de escritorio con pestañas, temas y búsqueda. PowerShell, cmd, Git Bash o WSL en Windows y tu shell en macOS y Linux, con colores y programas interactivos. Gratis y de código abierto." />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://api.github.com" />
+    <link rel="icon" href="assets/icons/icon.png" />
+    <link rel="stylesheet" href="assets/css/styles.css" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="HYPE Terminal — Terminal con pestañas para Windows, macOS y Linux" />
+    <meta
+      property="og:description"
+      content="Pestañas con nombre, 6 temas, búsqueda en la salida y una shell real con colores y programas interactivos. Gratis y de código abierto." />
+    <meta
+      property="og:image"
+      content="https://cmurestudillos.github.io/hype-terminal/assets/screenshots/01-terminal.png" />
+    <meta property="og:url" content="https://cmurestudillos.github.io/hype-terminal/" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Saltar al contenido</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#/">
+          <img src="assets/icons/icon.png" alt="" width="32" height="32" />
+          <span>HYPE Terminal</span>
+        </a>
+
+        <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="siteNav" aria-label="Abrir menú">
+          <span></span><span></span><span></span>
+        </button>
+
+        <nav class="site-nav" id="siteNav" aria-label="Navegación principal">
+          <a href="#/" data-route-link="/">Inicio</a>
+          <a href="#/caracteristicas" data-route-link="/caracteristicas">Características</a>
+          <a href="#/capturas" data-route-link="/capturas">Capturas</a>
+          <a href="#/descargas" data-route-link="/descargas">Descargas</a>
+          <a href="#/documentacion" data-route-link="/documentacion">Documentación</a>
+          <a class="nav-cta" href="https://github.com/cmurestudillos/hype-terminal" rel="noopener">GitHub</a>
+          <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema" title="Cambiar tema">
+            <span aria-hidden="true">🌗</span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- ══════════════════ INICIO ══════════════════ -->
+      <section class="view" data-route="/">
+        <div class="hero">
+          <div class="container hero-inner">
+            <div class="hero-copy">
+              <p class="eyebrow">
+                <span class="dot"></span> Código abierto · MIT ·
+                <span id="heroVersion">v1.2.0</span>
+              </p>
+              <h1>Tu terminal, con pestañas y a tu gusto</h1>
+              <p class="lead">
+                Una terminal de escritorio con pestañas, temas y búsqueda. Por dentro, una shell real: PowerShell, cmd,
+                Git Bash o WSL en Windows y la tuya en macOS y Linux, con colores, autocompletado y programas
+                interactivos.
+              </p>
+              <div class="hero-actions">
+                <a class="btn btn-primary btn-lg" id="heroDownload" href="#/descargas"> ⬇ Descargar gratis </a>
+                <a class="btn btn-ghost btn-lg" href="#/capturas">Ver capturas</a>
+              </div>
+              <p class="hero-meta" id="heroMeta">Windows · macOS · Linux — sin registro, sin telemetría</p>
+            </div>
+
+            <figure class="hero-shot">
+              <img
+                src="assets/screenshots/01-terminal.png"
+                alt="HYPE Terminal con una pestaña ejecutando git log, git status y npm test con la salida en colores"
+                width="1280"
+                height="800"
+                loading="eager" />
+            </figure>
+          </div>
+        </div>
+
+        <div class="container">
+          <ul class="stat-row">
+            <li><strong>6</strong><span>temas incluidos</span></li>
+            <li><strong>3</strong><span>sistemas operativos</span></li>
+            <li><strong>Ctrl+F</strong><span>búsqueda en la salida</span></li>
+            <li><strong>MIT</strong><span>licencia libre</span></li>
+          </ul>
+
+          <h2 class="section-title">Cómo funciona</h2>
+          <ol class="steps">
+            <li>
+              <span class="step-num">1</span>
+              <h3>Instálala</h3>
+              <p>
+                Descarga el instalador de tu sistema. Al abrirla tendrás una pestaña con tu shell en tu carpeta
+                personal; las siguientes veces, las pestañas que dejaste abiertas.
+              </p>
+            </li>
+            <li>
+              <span class="step-num">2</span>
+              <h3>Organiza tus pestañas</h3>
+              <p>
+                <kbd>Ctrl+T</kbd> abre otra pestaña y <strong>▾</strong> te deja elegir la shell. Ponle nombre con doble
+                clic o <kbd>F2</kbd>: «Servidor», «Tests», «Logs»…
+              </p>
+            </li>
+            <li>
+              <span class="step-num">3</span>
+              <h3>Hazla tuya</h3>
+              <p>
+                Desde el menú <strong>☰</strong>, elige uno de los 6 temas en <em>Ver › Temas</em> o ajusta los colores
+                en <em>Ver › Personalizar Colores</em>.
+              </p>
+            </li>
+          </ol>
+
+          <div class="cta-band">
+            <div>
+              <h2>¿Lista para tu día a día?</h2>
+              <p>Instaladores para Windows, macOS (Apple Silicon) y Linux. Todo funciona en local.</p>
+            </div>
+            <a class="btn btn-primary btn-lg" href="#/descargas">Ir a descargas</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════ CARACTERÍSTICAS ══════════════════ -->
+      <section class="view" data-route="/caracteristicas">
+        <div class="container">
+          <h1 class="page-title">Características</h1>
+          <p class="page-lead">Todo lo que esperas de tu terminal, con pestañas con nombre, temas y búsqueda.</p>
+
+          <div class="card-grid">
+            <article class="card">
+              <span class="card-icon">💻</span>
+              <h3>Una shell de verdad</h3>
+              <p>
+                Cada pestaña es una pseudo-terminal (ConPTY en Windows). Funcionan los colores y los programas
+                interactivos como <code>node</code>, <code>python</code> o <code>vim</code>, y las variables y el
+                directorio se mantienen entre comandos.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-icon">🗂️</span>
+              <h3>Pestañas con nombre</h3>
+              <p>
+                El título sigue al directorio actual. Con doble clic o <kbd>F2</kbd> le pones un nombre propio que se
+                mantiene aunque cambies de carpeta.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-icon">🐚</span>
+              <h3>La shell que prefieras</h3>
+              <p>
+                Detecta las que tienes instaladas: Windows PowerShell, PowerShell 7, cmd, Git Bash y WSL en Windows;
+                zsh, bash y fish en macOS y Linux. Abre cada pestaña con la que quieras y elige la de por defecto.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-icon">♻️</span>
+              <h3>Retoma donde lo dejaste</h3>
+              <p>
+                Al volver a abrirla recupera tus pestañas con su shell, su nombre y su directorio. Se puede desactivar
+                en <em>Archivo › Restaurar Pestañas al Abrir</em>.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-icon">⛔</span>
+              <h3>Ctrl+C y cierres seguros</h3>
+              <p>
+                <kbd>Ctrl+C</kbd> interrumpe el comando en curso (o copia, si hay texto seleccionado). Si cierras una
+                pestaña o la ventana con algo en marcha, como un servidor, te pregunta antes.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-icon">🔗</span>
+              <h3>Enlaces clicables</h3>
+              <p>
+                Las URLs de la salida (por ejemplo <code>http://localhost:3000</code>) se abren en el navegador con
+                <kbd>Ctrl</kbd>+clic.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-icon">🔍</span>
+              <h3>Búsqueda en la salida</h3>
+              <p>
+                <kbd>Ctrl+F</kbd> resalta las coincidencias en la pestaña activa, con contador y saltos con
+                <kbd>Enter</kbd> / <kbd>Mayús+Enter</kbd>.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-icon">🎨</span>
+              <h3>Temas y colores</h3>
+              <p>
+                Oscuro, Claro, Monokai, Solarized, Retro y Hacker. También puedes elegir tus propios colores de fondo,
+                texto, cursor y selección. La barra de título, con los botones de la ventana, se adapta al tema.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-icon">⌨️</span>
+              <h3>Lo de tu shell, intacto</h3>
+              <p>
+                Autocompletado con <kbd>Tab</kbd>, historial con <kbd>↑</kbd> <kbd>↓</kbd> y tu perfil o configuración
+                de siempre (en PowerShell, PSReadLine con historial entre sesiones).
+              </p>
+            </article>
+          </div>
+
+          <h2 class="section-title">Atajos de teclado</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Atajo</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><kbd>Ctrl+T</kbd></td>
+                  <td>Nueva pestaña</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+W</kbd></td>
+                  <td>Cerrar pestaña (también al escribir <code>exit</code>)</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+Tab</kbd> · <kbd>Ctrl+Shift+Tab</kbd></td>
+                  <td>Pestaña siguiente · anterior</td>
+                </tr>
+                <tr>
+                  <td><kbd>F2</kbd> · doble clic en la pestaña</td>
+                  <td>Renombrar pestaña (vacío = título automático)</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+C</kbd></td>
+                  <td>Copiar si hay texto seleccionado; si no, interrumpir el comando</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+V</kbd> · clic derecho</td>
+                  <td>Pegar (clic derecho con texto seleccionado lo copia)</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+F</kbd></td>
+                  <td>Buscar en la salida (<kbd>Esc</kbd> para cerrar)</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl+=</kbd> · <kbd>Ctrl+-</kbd> · <kbd>Ctrl+0</kbd></td>
+                  <td>Aumentar · reducir · restablecer el tamaño del texto</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+clic en una URL</td>
+                  <td>Abrirla en el navegador</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="muted small">
+            En macOS se usa <kbd>Cmd</kbd> en lugar de <kbd>Ctrl</kbd>, salvo <kbd>Ctrl+Tab</kbd> para cambiar de
+            pestaña y <kbd>Ctrl+C</kbd> para interrumpir.
+          </p>
+
+          <h2 class="section-title">Shell en cada sistema</h2>
+          <ul class="chip-list">
+            <li>Windows PowerShell</li>
+            <li>PowerShell 7</li>
+            <li>Símbolo del sistema (cmd)</li>
+            <li>Git Bash</li>
+            <li>WSL</li>
+            <li>zsh · bash · fish</li>
+            <li>256 colores · truecolor</li>
+          </ul>
+          <p class="muted small">
+            Solo aparecen las que estén instaladas. WSL aparece si tiene al menos una distribución. En macOS las shells
+            se abren como shell de login (cargan <code>~/.zprofile</code>).
+          </p>
+        </div>
+      </section>
+
+      <!-- ══════════════════ CAPTURAS ══════════════════ -->
+      <section class="view" data-route="/capturas">
+        <div class="container">
+          <h1 class="page-title">Capturas</h1>
+          <p class="page-lead">
+            Capturas reales de la aplicación en Windows trabajando con un proyecto de ejemplo («mi-api»): git, tests, un
+            servidor y el REPL de Node. Haz clic para ampliar.
+          </p>
+
+          <div class="gallery" id="gallery">
+            <figure class="shot">
+              <button
+                class="shot-btn"
+                data-full="assets/screenshots/01-terminal.png"
+                data-caption="Tema Oscuro: git log, git status y npm test con la salida en colores, en una pestaña llamada «mi-api».">
+                <img
+                  src="assets/screenshots/01-terminal.png"
+                  alt="Pestaña con git log, git status y los resultados de npm test en colores"
+                  loading="lazy" />
+              </button>
+              <figcaption>
+                <strong>Tu shell, con colores</strong> — git y los tests tal cual se ven en una terminal nativa.
+              </figcaption>
+            </figure>
+
+            <figure class="shot">
+              <button
+                class="shot-btn"
+                data-full="assets/screenshots/02-pestanas.png"
+                data-caption="Tema Monokai con tres pestañas con nombre: el proyecto, un servidor en marcha y otra para lanzar peticiones.">
+                <img
+                  src="assets/screenshots/02-pestanas.png"
+                  alt="Tres pestañas llamadas mi-api, Servidor y Peticiones con el tema Monokai"
+                  loading="lazy" />
+              </button>
+              <figcaption>
+                <strong>Pestañas con nombre</strong> — un servidor en una, las peticiones en otra.
+              </figcaption>
+            </figure>
+
+            <figure class="shot">
+              <button
+                class="shot-btn"
+                data-full="assets/screenshots/03-busqueda.png"
+                data-caption="Búsqueda con Ctrl+F: las coincidencias de «findUser» resaltadas y el contador «1 de 2».">
+                <img
+                  src="assets/screenshots/03-busqueda.png"
+                  alt="Barra de búsqueda abierta con las coincidencias resaltadas en la salida"
+                  loading="lazy" />
+              </button>
+              <figcaption><strong>Búsqueda</strong> — coincidencias resaltadas y contador.</figcaption>
+            </figure>
+
+            <figure class="shot">
+              <button
+                class="shot-btn"
+                data-full="assets/screenshots/04-interactivo.png"
+                data-caption="Tema Claro con el REPL de Node.js abierto: los programas interactivos funcionan como en una terminal nativa.">
+                <img
+                  src="assets/screenshots/04-interactivo.png"
+                  alt="REPL de Node.js en una pestaña con el tema claro"
+                  loading="lazy" />
+              </button>
+              <figcaption><strong>Programas interactivos</strong> — el REPL de Node o de Python, vim…</figcaption>
+            </figure>
+
+            <figure class="shot">
+              <button
+                class="shot-btn"
+                data-full="assets/screenshots/05-personalizar.png"
+                data-caption="Tema Retro con el diálogo Personalizar Colores: fondo, texto, cursor y acento, y selección.">
+                <img
+                  src="assets/screenshots/05-personalizar.png"
+                  alt="Diálogo para personalizar los colores sobre el tema Retro"
+                  loading="lazy" />
+              </button>
+              <figcaption><strong>Personalizar colores</strong> — cuatro colores sobre cualquier tema.</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════ DESCARGAS ══════════════════ -->
+      <section class="view" data-route="/descargas">
+        <div class="container">
+          <h1 class="page-title">Descargas</h1>
+          <p class="page-lead">
+            Última versión: <strong id="releaseTag">v1.2.0</strong>
+            <span id="releaseDate" class="muted"></span>
+          </p>
+
+          <div class="download-grid" id="downloadGrid">
+            <article class="download-card" data-os="windows">
+              <span class="os-icon" aria-hidden="true">🪟</span>
+              <h3>Windows</h3>
+              <p class="os-detail">Instalador <code>.exe</code> · 64 bits · Windows 10/11</p>
+              <a
+                class="btn btn-primary"
+                data-dl="windows"
+                href="https://github.com/cmurestudillos/hype-terminal/releases/latest"
+                >Descargar</a
+              >
+              <p class="dl-size" data-size="windows"></p>
+            </article>
+
+            <article class="download-card" data-os="mac">
+              <span class="os-icon" aria-hidden="true">🍎</span>
+              <h3>macOS</h3>
+              <p class="os-detail">Imagen <code>.dmg</code> · Apple Silicon</p>
+              <a
+                class="btn btn-primary"
+                data-dl="mac"
+                href="https://github.com/cmurestudillos/hype-terminal/releases/latest"
+                >Descargar</a
+              >
+              <p class="dl-size" data-size="mac"></p>
+            </article>
+
+            <article class="download-card" data-os="linux">
+              <span class="os-icon" aria-hidden="true">🐧</span>
+              <h3>Linux</h3>
+              <p class="os-detail">Ejecutable <code>.AppImage</code> · x64</p>
+              <a
+                class="btn btn-primary"
+                data-dl="linux"
+                href="https://github.com/cmurestudillos/hype-terminal/releases/latest"
+                >Descargar</a
+              >
+              <p class="dl-size" data-size="linux"></p>
+            </article>
+          </div>
+
+          <p class="muted small">
+            ¿Prefieres ver todos los archivos?
+            <a href="https://github.com/cmurestudillos/hype-terminal/releases" rel="noopener"
+              >Todas las versiones en GitHub</a
+            >.
+          </p>
+
+          <h2 class="section-title">Notas de instalación</h2>
+          <div class="note-grid">
+            <div class="note">
+              <h3>🪟 Windows</h3>
+              <p>
+                SmartScreen puede avisar de que el editor es desconocido porque el instalador no está firmado. Pulsa
+                <em>Más información → Ejecutar de todas formas</em>.
+              </p>
+            </div>
+            <div class="note">
+              <h3>🍎 macOS</h3>
+              <p>
+                Si Gatekeeper bloquea la app, ábrela con clic derecho → <em>Abrir</em>, o ejecuta
+                <code>xattr -cr "/Applications/HYPE Terminal.app"</code>.
+              </p>
+            </div>
+            <div class="note">
+              <h3>🐧 Linux</h3>
+              <p>
+                Dale permisos de ejecución al AppImage:
+                <code>chmod +x HYPE-Terminal-*.AppImage</code> y lánzalo con doble clic.
+              </p>
+            </div>
+          </div>
+
+          <h2 class="section-title">Compilar desde el código</h2>
+          <pre class="code-block"><code>git clone https://github.com/cmurestudillos/hype-terminal.git
+cd hype-terminal
+pnpm install
+
+pnpm start           # ejecutar en desarrollo
+pnpm package:win     # generar instalador de Windows
+pnpm package:mac     # generar imagen de macOS
+pnpm package:linux   # generar AppImage</code></pre>
+          <p class="muted small">
+            Requisitos: Node.js 22.12+ y pnpm 11+. En Linux, <code>pnpm install</code> compila el módulo nativo de la
+            terminal (<code>node-pty</code>) y necesita <code>python3</code>, <code>make</code> y <code>g++</code>; en
+            Windows y macOS se usan binarios precompilados. Los instaladores se generan en <code>release/</code>.
+          </p>
+        </div>
+      </section>
+
+      <!-- ══════════════════ DOCUMENTACIÓN ══════════════════ -->
+      <section class="view" data-route="/documentacion">
+        <div class="container docs-layout">
+          <article class="docs-body">
+            <h1 class="page-title">Documentación</h1>
+
+            <h2 id="uso">Guía de uso</h2>
+            <h3>Ventana y menú</h3>
+            <p>
+              Las pestañas ocupan la barra de título, como en Windows Terminal: arrastra la ventana desde el hueco libre
+              junto a ellas (doble clic maximiza). En Windows y Linux el menú de la aplicación está en el botón
+              <strong>☰</strong>; en macOS, en la barra de menús del sistema.
+            </p>
+
+            <h3>Pestañas y shells</h3>
+            <p>
+              Cada pestaña arranca su propia shell en tu carpeta personal. <kbd>Ctrl+T</kbd> o el botón
+              <strong>+</strong> abren la shell por defecto; el botón <strong>▾</strong> o
+              <em>Archivo › Nueva Pestaña con</em> te dejan elegir otra, y <em>Archivo › Shell por Defecto</em> cambia
+              la de siempre. Cierra pestañas con <kbd>Ctrl+W</kbd>, con la <strong>×</strong> o escribiendo
+              <code>exit</code>; si cierras la última, se abre una nueva.
+            </p>
+
+            <h3>Restaurar pestañas</h3>
+            <p>
+              Al cerrar la aplicación se guardan las pestañas abiertas: shell, nombre y directorio. Al volver a abrirla
+              se recuperan (los comandos que estuvieran en marcha no). Si un directorio ya no existe, la pestaña se abre
+              en tu carpeta personal. Se desactiva en <em>Archivo › Restaurar Pestañas al Abrir</em>.
+            </p>
+
+            <h3>Comandos en marcha</h3>
+            <p>
+              Si cierras una pestaña o la ventana mientras un comando sigue en marcha (un servidor, un build, un REPL…),
+              HYPE Terminal te pide confirmación. Al cerrar, se terminan también sus procesos hijos.
+            </p>
+
+            <h3>Nombres de pestaña</h3>
+            <p>
+              Con PowerShell, cmd, Git Bash y bash, el título muestra el directorio actual. Haz doble clic en la pestaña
+              o pulsa
+              <kbd>F2</kbd> para ponerle un nombre: <kbd>Enter</kbd> lo guarda, <kbd>Esc</kbd> cancela y dejarlo vacío
+              vuelve al título automático. Al pasar el ratón ves el nombre y el directorio.
+            </p>
+
+            <h3>Copiar, pegar, interrumpir y enlaces</h3>
+            <p>
+              Selecciona texto con el ratón y pulsa <kbd>Ctrl+C</kbd> o clic derecho para copiarlo. Sin selección,
+              <kbd>Ctrl+C</kbd> interrumpe el comando en curso. Pega con <kbd>Ctrl+V</kbd> o clic derecho. Las URLs
+              <code>http</code> y <code>https</code> se subrayan al pasar el ratón y se abren con <kbd>Ctrl</kbd>+clic.
+            </p>
+
+            <h3>Buscar</h3>
+            <p>
+              <kbd>Ctrl+F</kbd> (o <em>Editar › Buscar</em>) abre la barra de búsqueda de la pestaña activa. Si tenías
+              texto seleccionado, se busca directamente. <kbd>Enter</kbd> y <kbd>Mayús+Enter</kbd> saltan entre
+              coincidencias; <kbd>Esc</kbd> cierra la barra.
+            </p>
+
+            <h3>Temas, colores y texto</h3>
+            <p>
+              En el menú, <em>Ver › Temas</em> cambia entre Oscuro, Claro, Monokai, Solarized, Retro y Hacker. En
+              <em>Ver › Personalizar Colores</em> eliges fondo, texto, cursor y acento, y selección. Al elegir un tema
+              del menú se descartan los colores personalizados. El tamaño del texto se ajusta con <kbd>Ctrl+=</kbd>,
+              <kbd>Ctrl+-</kbd> y <kbd>Ctrl+0</kbd>. Todo se recuerda al volver a abrir la aplicación.
+            </p>
+
+            <h2 id="limitaciones">Limitaciones conocidas</h2>
+            <ul class="roadmap">
+              <li>
+                <span class="tag">zsh y fish</span> El título automático y el directorio restaurado dependen de que tu
+                configuración publique el directorio (oh-my-zsh lo hace); si no, la pestaña muestra «Terminal N» y se
+                restaura en tu carpeta personal.
+              </li>
+              <li>
+                <span class="tag">WSL</span> Las pestañas de WSL se restauran con su shell, pero no con su directorio.
+              </li>
+              <li>
+                <span class="tag">PowerShell 5.1</span> <code>cd -</code> no existe en Windows PowerShell (sí en
+                PowerShell 7 y en bash).
+              </li>
+              <li>
+                <span class="tag">Firma</span> Los instaladores no están firmados (avisos de SmartScreen y Gatekeeper).
+              </li>
+              <li><span class="tag">macOS</span> Solo hay versión para Apple Silicon.</li>
+            </ul>
+
+            <h2 id="arquitectura">Arquitectura</h2>
+            <pre
+              class="code-block"><code>├── main.js       # proceso principal: ventana, menú, shells y una pseudo-terminal (node-pty) por pestaña
+├── preload.js    # puente IPC seguro (contextIsolation activo)
+├── renderer.js   # interfaz: pestañas, xterm.js, búsqueda, temas y colores
+├── index.html    # estructura de la ventana
+└── styles.css    # temas mediante variables CSS</code></pre>
+            <p>
+              Construida con <strong>Electron</strong>, <strong>node-pty</strong> para las pseudo-terminales y
+              <strong>xterm.js</strong> para mostrarlas. Sin frameworks de UI: HTML, CSS y JavaScript.
+            </p>
+
+            <h2 id="roadmap">Roadmap</h2>
+            <ul class="roadmap">
+              <li><span class="tag">Paneles</span> Dividir la ventana en paneles horizontales y verticales</li>
+              <li><span class="tag">Perfiles</span> Configuración exportable: temas, fuentes y atajos</li>
+              <li><span class="tag">Pestañas</span> Reordenar pestañas arrastrándolas</li>
+              <li><span class="tag">Actualización</span> Actualizaciones automáticas</li>
+            </ul>
+
+            <h2 id="contribuir">Contribuir</h2>
+            <p>
+              Los issues y pull requests son bienvenidos. Abre un
+              <a href="https://github.com/cmurestudillos/hype-terminal/issues" rel="noopener">issue</a> describiendo el
+              problema (sistema operativo, shell y pasos para reproducirlo) o la funcionalidad que echas de menos.
+            </p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div>
+          <p class="brand-sm">💻 HYPE Terminal</p>
+          <p class="muted small">Licencia MIT · Hecho por Carlos Mur</p>
+        </div>
+        <nav aria-label="Enlaces del pie">
+          <a href="https://github.com/cmurestudillos/hype-terminal" rel="noopener">Repositorio</a>
+          <a href="https://github.com/cmurestudillos/hype-terminal/releases" rel="noopener">Versiones</a>
+          <a href="https://github.com/cmurestudillos/hype-terminal/issues" rel="noopener">Reportar un bug</a>
+          <a href="https://github.com/cmurestudillos" rel="noopener">@cmurestudillos</a>
+        </nav>
+      </div>
+    </footer>
+
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox" hidden>
+      <button class="lightbox-close" id="lightboxClose" aria-label="Cerrar">✕</button>
+      <figure>
+        <img id="lightboxImg" src="" alt="" />
+        <figcaption id="lightboxCaption"></figcaption>
+      </figure>
+    </div>
+
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>
