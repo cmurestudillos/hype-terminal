@@ -245,27 +245,40 @@ ipcMain.on('terminal-command', (event, { command, sessionId }) => {
     return;
   }
 
-  // Ejecutar en el directorio actual con streaming de output en tiempo real
+  // Ejecutar en el directorio actual con streaming de output en tiempo real.
+  // En Windows la salida redirigida usa la página de códigos OEM (850 en español): se fuerza UTF-8
+  // para que tildes, eñes y símbolos lleguen bien. El comando va en una variable de entorno para
+  // que los errores de PowerShell muestren la posición dentro del comando del usuario.
   const [cmd, ...spawnArgs] =
-    process.platform === 'win32' ? ['powershell.exe', '-Command', command] : ['bash', '-c', command];
+    process.platform === 'win32'
+      ? [
+          'powershell.exe',
+          '-Command',
+          '[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; Invoke-Expression $env:HYPE_COMMAND',
+        ]
+      : ['bash', '-c', command];
 
   const proc = spawn(cmd, spawnArgs, {
     cwd: currentDirectory,
-    env: process.env,
+    env: process.platform === 'win32' ? { ...process.env, HYPE_COMMAND: command } : process.env,
     windowsHide: true,
   });
+
+  // Decodificar como texto con estado: un carácter multibyte partido entre dos trozos no se corrompe
+  proc.stdout.setEncoding('utf8');
+  proc.stderr.setEncoding('utf8');
 
   sessions[sessionId].activeProcess = proc;
 
   proc.stdout.on('data', data => {
     if (mainWindow) {
-      mainWindow.webContents.send('terminal-output', { sessionId, output: data.toString() });
+      mainWindow.webContents.send('terminal-output', { sessionId, output: data });
     }
   });
 
   proc.stderr.on('data', data => {
     if (mainWindow) {
-      mainWindow.webContents.send('terminal-output', { sessionId, output: data.toString() });
+      mainWindow.webContents.send('terminal-output', { sessionId, output: data });
     }
   });
 

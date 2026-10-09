@@ -25,9 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
     createNewTab(sessionId);
   });
 
+  // Sesiones cuya última línea de salida quedó abierta (el trozo anterior no acabó en salto de línea)
+  const openLines = new Set();
+
   // Manejar eventos de terminal
   window.terminal.onOutput((sessionId, data) => {
-    appendToOutput(sessionId, data);
+    appendToOutput(sessionId, data, true);
   });
 
   window.terminal.onPrompt((sessionId, prompt) => {
@@ -266,6 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Remover de la lista
     tabs.splice(tabIndex, 1);
+    openLines.delete(sessionId);
 
     // Si era la pestaña activa, activar otra
     if (activeTab && activeTab.id === sessionId) {
@@ -301,20 +305,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Funciones para manejar la salida de la terminal
-  function appendToOutput(sessionId, text) {
+  // stream = true para la salida de los procesos, que llega en trozos que pueden cortar una línea
+  function appendToOutput(sessionId, text, stream = false) {
     const outputElement = document.getElementById(`output-${sessionId}`);
-    if (!outputElement) {
+    if (!outputElement || text === '') {
       return;
     }
-    const lines = text.split('\n');
+    const continueLine = stream && openLines.has(sessionId) && outputElement.lastElementChild;
+    const lines = text.split(/\r?\n/);
     lines.forEach((line, i) => {
       if (i === lines.length - 1 && line === '') {
+        return;
+      }
+      if (i === 0 && continueLine) {
+        outputElement.lastElementChild.textContent += line;
         return;
       }
       const div = document.createElement('div');
       div.textContent = line;
       outputElement.appendChild(div);
     });
+    if (stream && !text.endsWith('\n')) {
+      openLines.add(sessionId);
+    } else {
+      openLines.delete(sessionId);
+    }
     outputElement.scrollTop = outputElement.scrollHeight;
   }
 
@@ -325,6 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     promptElement.textContent = prompt;
+    openLines.delete(sessionId);
 
     // Enfocar el input
     if (activeTab && activeTab.id === sessionId) {
@@ -372,6 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     outputElement.innerHTML = '';
+    openLines.delete(sessionId);
   }
 
   // Funciones para temas y personalización
