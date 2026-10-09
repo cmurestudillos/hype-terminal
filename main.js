@@ -187,28 +187,28 @@ ipcMain.on('terminal-command', (event, { command, sessionId }) => {
   const currentDirectory = sessions[sessionId].directory;
 
   // Manejar cambio de directorio especialmente
-  if (command.trim().startsWith('cd ')) {
-    const targetDir = command.trim().substring(3);
+  // (en Unix, "cd" sin argumentos lleva al home; en Windows muestra el directorio actual, más abajo)
+  if (command.trim().startsWith('cd ') || (process.platform !== 'win32' && command.trim() === 'cd')) {
+    // Quitar comillas envolventes: cd "Mis proyectos"
+    const targetDir = command
+      .trim()
+      .substring(2)
+      .trim()
+      .replace(/^(["'])(.*)\1$/, '$2');
 
     try {
-      // Manejar rutas relativas y absolutas
+      // ~ y ~/ruta → home; el resto (relativas, absolutas, C:/ con barras normales, ..) con path.resolve
       let newDir;
-      if (targetDir.startsWith('/') || (process.platform === 'win32' && targetDir.match(/^[A-Z]:\\/i))) {
-        // Ruta absoluta
-        newDir = targetDir;
-      } else if (targetDir === '..') {
-        // Directorio padre
-        newDir = path.dirname(currentDirectory);
-      } else if (targetDir === '~' || targetDir === '') {
-        // Directorio home
+      if (targetDir === '' || targetDir === '~') {
         newDir = os.homedir();
+      } else if (/^~[\\/]/.test(targetDir)) {
+        newDir = path.join(os.homedir(), targetDir.substring(2));
       } else {
-        // Ruta relativa
-        newDir = path.join(currentDirectory, targetDir);
+        newDir = path.resolve(currentDirectory, targetDir);
       }
 
-      // Verificar si el directorio existe
-      if (fs.existsSync(newDir)) {
+      // Verificar que existe y es un directorio (con un archivo, los comandos siguientes fallarían)
+      if (fs.existsSync(newDir) && fs.statSync(newDir).isDirectory()) {
         sessions[sessionId].directory = newDir;
         mainWindow.webContents.send('terminal-output', { sessionId, output: `Directorio cambiado a: ${newDir}` });
       } else {
@@ -308,7 +308,12 @@ function sendPromptForSession(sessionId) {
   }
 
   const sessionDir = sessions[sessionId].directory;
-  const displayDir = sessionDir.replace(os.homedir(), '~');
+  // Abreviar el home con ~ solo si es el home o está dentro (no C:\Users\Carlos2 → ~2)
+  const home = os.homedir();
+  const displayDir =
+    sessionDir === home || sessionDir.startsWith(home + path.sep)
+      ? '~' + sessionDir.substring(home.length)
+      : sessionDir;
   const prompt =
     process.platform === 'win32' ? `PS ${displayDir}> ` : `${os.userInfo().username}@${os.hostname()}:${displayDir}$ `;
 
