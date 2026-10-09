@@ -28,7 +28,7 @@ function createWindow() {
         {
           label: 'Nueva Pestaña',
           accelerator: 'CmdOrCtrl+T',
-          click: () => mainWindow.webContents.send('new-tab'),
+          click: () => sendToWindow('new-tab'),
         },
         { type: 'separator' },
         { role: 'quit', label: 'Salir' },
@@ -53,27 +53,27 @@ function createWindow() {
           submenu: [
             {
               label: 'Oscuro (Default)',
-              click: () => mainWindow.webContents.send('change-theme', 'dark'),
+              click: () => sendToWindow('change-theme', 'dark'),
             },
             {
               label: 'Claro',
-              click: () => mainWindow.webContents.send('change-theme', 'light'),
+              click: () => sendToWindow('change-theme', 'light'),
             },
             {
               label: 'Monokai',
-              click: () => mainWindow.webContents.send('change-theme', 'monokai'),
+              click: () => sendToWindow('change-theme', 'monokai'),
             },
             {
               label: 'Solarized',
-              click: () => mainWindow.webContents.send('change-theme', 'solarized'),
+              click: () => sendToWindow('change-theme', 'solarized'),
             },
             {
               label: 'Retro',
-              click: () => mainWindow.webContents.send('change-theme', 'retro'),
+              click: () => sendToWindow('change-theme', 'retro'),
             },
             {
               label: 'Hacker',
-              click: () => mainWindow.webContents.send('change-theme', 'hacker'),
+              click: () => sendToWindow('change-theme', 'hacker'),
             },
           ],
         },
@@ -81,7 +81,7 @@ function createWindow() {
           label: 'Personalizar Colores...',
           click: () => {
             // Enviar evento para mostrar el personalizador de colores
-            mainWindow.webContents.send('show-color-customizer');
+            sendToWindow('show-color-customizer');
           },
         },
       ],
@@ -92,23 +92,23 @@ function createWindow() {
         {
           label: 'Nueva Pestaña',
           accelerator: 'CmdOrCtrl+T',
-          click: () => mainWindow.webContents.send('new-tab'),
+          click: () => sendToWindow('new-tab'),
         },
         {
           label: 'Cerrar Pestaña',
           accelerator: 'CmdOrCtrl+W',
-          click: () => mainWindow.webContents.send('close-tab'),
+          click: () => sendToWindow('close-tab'),
         },
         { type: 'separator' },
         {
           label: 'Pestaña Siguiente',
           accelerator: 'CmdOrCtrl+Tab',
-          click: () => mainWindow.webContents.send('next-tab'),
+          click: () => sendToWindow('next-tab'),
         },
         {
           label: 'Pestaña Anterior',
           accelerator: 'CmdOrCtrl+Shift+Tab',
-          click: () => mainWindow.webContents.send('prev-tab'),
+          click: () => sendToWindow('prev-tab'),
         },
       ],
     },
@@ -116,29 +116,55 @@ function createWindow() {
 
   Menu.setApplicationMenu(menu);
 
-  // Registrar manejador para cambio de color personalizado
-  ipcMain.on('set-custom-colors', (event, colors) => {
-    // Guardar colores en localStorage (se hace en el frontend)
-    mainWindow.webContents.send('apply-custom-colors', colors);
-  });
-
   mainWindow.on('closed', () => {
+    closeAllSessions();
     mainWindow = null;
   });
 
-  // Crear la primera sesión automáticamente al iniciar
-  const initialSessionId = generateSessionId();
-  sessions[initialSessionId] = {
-    directory: os.homedir(),
-    history: [],
-    activeProcess: null,
-  };
+  // Crear la primera sesión cada vez que la página termina de cargar (también tras Ver › Recargar).
+  // Con un retraso fijo la sesión se perdía si el renderer tardaba más en registrar sus listeners,
+  // y al recargar la ventana quedaba sin pestañas.
+  mainWindow.webContents.on('did-finish-load', () => {
+    // Las sesiones de la página anterior ya no tienen pestaña
+    closeAllSessions();
 
-  // Enviar el prompt inicial después de un breve retraso
-  setTimeout(() => {
-    sendPromptForSession(initialSessionId);
+    const initialSessionId = generateSessionId();
+    sessions[initialSessionId] = {
+      directory: os.homedir(),
+      history: [],
+      activeProcess: null,
+    };
     mainWindow.webContents.send('initial-session', initialSessionId);
-  }, 500);
+    sendPromptForSession(initialSessionId);
+  });
+}
+
+// Enviar un evento a la ventana si sigue abierta (en macOS el menú existe sin ventana)
+function sendToWindow(channel, ...args) {
+  if (mainWindow) {
+    mainWindow.webContents.send(channel, ...args);
+  }
+}
+
+// Registrar manejador para cambio de color personalizado (una sola vez: en macOS
+// la ventana puede crearse varias veces con "activate")
+ipcMain.on('set-custom-colors', (event, colors) => {
+  // Guardar colores en localStorage (se hace en el frontend)
+  sendToWindow('apply-custom-colors', colors);
+});
+
+// Cerrar una sesión y terminar su comando en curso
+function closeSession(sessionId) {
+  if (sessions[sessionId]) {
+    if (sessions[sessionId].activeProcess) {
+      sessions[sessionId].activeProcess.kill();
+    }
+    delete sessions[sessionId];
+  }
+}
+
+function closeAllSessions() {
+  Object.keys(sessions).forEach(closeSession);
 }
 
 // Función para generar un ID de sesión único
@@ -164,12 +190,7 @@ ipcMain.on('switch-session', (event, sessionId) => {
 });
 
 ipcMain.on('close-session', (event, sessionId) => {
-  if (sessions[sessionId]) {
-    if (sessions[sessionId].activeProcess) {
-      sessions[sessionId].activeProcess.kill();
-    }
-    delete sessions[sessionId];
-  }
+  closeSession(sessionId);
 });
 
 // Recibir comandos del renderer, ahora con sesiones
