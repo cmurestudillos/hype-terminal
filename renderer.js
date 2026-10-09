@@ -10,6 +10,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const terminalsContainer = document.getElementById('terminals-container');
   const newTabButton = document.getElementById('new-tab-button');
   const shellMenuButton = document.getElementById('shell-menu-button');
+  const appMenuButton = document.getElementById('app-menu-button');
+
+  // Plataforma para los estilos de la barra de título (semáforos a la izquierda en macOS)
+  document.body.classList.add(`platform-${window.terminal.platform}`);
 
   // Barra de búsqueda (Ctrl+F)
   const searchBar = document.getElementById('search-bar');
@@ -155,6 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
   shellMenuButton.addEventListener('click', () => {
     const rect = shellMenuButton.getBoundingClientRect();
     window.terminal.showShellMenu(rect.left, rect.bottom);
+  });
+  appMenuButton.addEventListener('click', () => {
+    const rect = appMenuButton.getBoundingClientRect();
+    window.terminal.showAppMenu(rect.left, rect.bottom);
   });
 
   // Ajustar la terminal visible al tamaño de la ventana
@@ -763,6 +771,8 @@ document.addEventListener('DOMContentLoaded', () => {
     tabs.forEach(t => {
       t.term.options.theme = theme;
     });
+    // Botones nativos de la ventana con los colores de la barra de pestañas
+    window.terminal.setTitleBarColors(theme.background, theme.foreground);
   }
 
   // Cambiar a un tema predefinido

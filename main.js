@@ -212,12 +212,31 @@ function launchSpec(shellInfo) {
 
 // ---------- ventana y menú ----------
 
+// Alto de la barra de pestañas, que hace de barra de título (debe coincidir con styles.css)
+const TITLE_BAR_HEIGHT = 40;
+
+// Sin marco: las pestañas ocupan la barra de título. En Windows y Linux los botones de minimizar,
+// maximizar y cerrar son los nativos superpuestos (titleBarOverlay); en macOS, los semáforos.
+function windowChromeOptions() {
+  if (process.platform === 'darwin') {
+    return { titleBarStyle: 'hidden', trafficLightPosition: { x: 14, y: 13 } };
+  }
+  return {
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#1e1e1e', symbolColor: '#f0f0f0', height: TITLE_BAR_HEIGHT },
+  };
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
+    minWidth: 480,
+    minHeight: 300,
     title: 'HYPE Terminal',
     icon: path.join(__dirname, 'assets', 'icon.png'),
+    backgroundColor: '#1e1e1e',
+    ...windowChromeOptions(),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -306,11 +325,12 @@ function askRenderer(channel) {
   });
 }
 
-function buildMenu() {
+// Plantilla del menú: barra de menús del sistema en macOS y botón ☰ de la ventana en Windows/Linux
+function menuTemplate() {
   const defaultId = defaultShell()?.id;
   const shellItems = shells.map(s => ({ label: s.name, click: () => sendToWindow('new-tab', s.id) }));
 
-  const menu = Menu.buildFromTemplate([
+  return [
     {
       label: 'Archivo',
       submenu: [
@@ -468,10 +488,34 @@ function buildMenu() {
         { label: 'Acerca de HYPE Terminal', click: showAbout },
       ],
     },
-  ]);
-
-  Menu.setApplicationMenu(menu);
+  ];
 }
+
+// El menú de la aplicación sigue registrado (sus atajos funcionan en todas las plataformas),
+// aunque en Windows y Linux no se muestra como barra: se abre desde el botón ☰
+function buildMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
+}
+
+ipcMain.on('app-menu', (event, { x, y }) => {
+  if (mainWindow) {
+    Menu.buildFromTemplate(menuTemplate()).popup({ window: mainWindow, x: Math.round(x), y: Math.round(y) });
+  }
+});
+
+// Colores de los botones nativos de la ventana según el tema
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+ipcMain.on('title-bar-colors', (event, { color, symbolColor }) => {
+  if (!mainWindow || process.platform === 'darwin' || !HEX_COLOR.test(color) || !HEX_COLOR.test(symbolColor)) {
+    return;
+  }
+  try {
+    mainWindow.setTitleBarOverlay({ color, symbolColor, height: TITLE_BAR_HEIGHT });
+    mainWindow.setBackgroundColor(color);
+  } catch (_error) {
+    // Plataforma sin titleBarOverlay
+  }
+});
 
 function showAbout() {
   const options = {

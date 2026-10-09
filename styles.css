@@ -31,17 +31,38 @@ body {
   width: 100%;
 }
 
+/* La barra de pestañas es la barra de título: se arrastra desde el hueco libre y deja sitio a los
+   botones nativos de la ventana (Windows/Linux, a la derecha) o a los semáforos (macOS, a la izquierda) */
 #tabs-container {
   display: flex;
   background-color: var(--background-color);
-  border-bottom: 1px solid var(--tab-border-color);
   padding: 0;
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
   height: 40px;
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.platform-darwin #tabs-container {
+  padding-left: 78px;
+}
+
+/* Hueco libre de la barra: zona para arrastrar la ventana (doble clic maximiza) */
+.title-spacer {
+  flex: 1 0 24px;
+}
+
+.tab,
+#tabs-container button,
+.tab-rename {
+  -webkit-app-region: no-drag;
 }
 
 #tabs {
   display: flex;
-  flex-grow: 1;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -135,6 +156,27 @@ body {
 #shell-menu-button:hover {
   background-color: var(--tab-hover-color);
   opacity: 1;
+}
+
+#app-menu-button {
+  background-color: transparent;
+  color: var(--text-color);
+  border: none;
+  font-size: 16px;
+  width: 36px;
+  cursor: pointer;
+  outline: none;
+  opacity: 0.85;
+}
+
+#app-menu-button:hover {
+  background-color: var(--tab-hover-color);
+  opacity: 1;
+}
+
+/* En macOS el menú está en la barra de menús del sistema */
+.platform-darwin #app-menu-button {
+  display: none;
 }
 
 #terminals-container {

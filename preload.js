@@ -7,6 +7,8 @@ function listen(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('terminal', {
+  platform: process.platform,
+
   // Shells disponibles y ajustes
   getConfig: () => ipcRenderer.invoke('get-config'),
 
@@ -23,6 +25,8 @@ contextBridge.exposeInMainWorld('terminal', {
   // Diálogos y menús nativos
   confirmCloseTab: title => ipcRenderer.invoke('confirm-close-tab', title),
   showShellMenu: (x, y) => ipcRenderer.send('shell-menu', { x, y }),
+  showAppMenu: (x, y) => ipcRenderer.send('app-menu', { x, y }),
+  setTitleBarColors: (color, symbolColor) => ipcRenderer.send('title-bar-colors', { color, symbolColor }),
   openExternal: url => ipcRenderer.send('open-external', url),
 
   // Copiar / pegar desde el clic derecho
