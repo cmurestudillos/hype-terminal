@@ -1,8 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const { Terminal } = window;
+  const { FitAddon } = window.FitAddon;
+  const { SearchAddon } = window.SearchAddon;
+  const { WebLinksAddon } = window.WebLinksAddon;
+  const isMac = navigator.platform.toUpperCase().includes('MAC');
+
   // Referencias a elementos del DOM
   const tabsContainer = document.getElementById('tabs');
   const terminalsContainer = document.getElementById('terminals-container');
   const newTabButton = document.getElementById('new-tab-button');
+  const shellMenuButton = document.getElementById('shell-menu-button');
+  const appMenuButton = document.getElementById('app-menu-button');
+
+  // Plataforma para los estilos de la barra de título (semáforos a la izquierda en macOS)
+  document.body.classList.add(`platform-${window.terminal.platform}`);
+
+  // Barra de búsqueda (Ctrl+F)
+  const searchBar = document.getElementById('search-bar');
+  const searchInput = document.getElementById('search-input');
+  const searchCount = document.getElementById('search-count');
 
   // Elementos para personalización de colores
   const colorCustomizer = document.getElementById('color-customizer');
@@ -13,68 +29,189 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyColorsButton = document.getElementById('apply-colors');
   const cancelColorsButton = document.getElementById('cancel-colors');
 
-  // Cargar tema guardado
-  loadSavedTheme();
+  const THEMES = ['dark', 'light', 'monokai', 'solarized', 'retro', 'hacker'];
+  const CUSTOM_PROPERTIES = ['--background-color', '--text-color', '--prompt-color', '--selection-color'];
+
+  // Colores ANSI por tema (los que no aparecen usan la paleta por defecto de xterm.js).
+  // En el tema claro los "blancos" y amarillos brillantes se oscurecen: PowerShell los usa
+  // para números y comandos y sobre fondo claro no se leerían.
+  const ANSI_PALETTES = {
+    light: {
+      black: '#383a42',
+      red: '#e45649',
+      green: '#50a14f',
+      yellow: '#c18401',
+      blue: '#0184bc',
+      magenta: '#a626a4',
+      cyan: '#0997b3',
+      white: '#6b6e76',
+      brightBlack: '#8a8d94',
+      brightRed: '#c4372a',
+      brightGreen: '#3e8e3e',
+      brightYellow: '#986801',
+      brightBlue: '#2f6fd0',
+      brightMagenta: '#a626a4',
+      brightCyan: '#0e7c8a',
+      brightWhite: '#202227',
+    },
+    monokai: {
+      black: '#272822',
+      red: '#f92672',
+      green: '#a6e22e',
+      yellow: '#f4bf75',
+      blue: '#66d9ef',
+      magenta: '#ae81ff',
+      cyan: '#a1efe4',
+      white: '#f8f8f2',
+      brightBlack: '#75715e',
+      brightRed: '#f92672',
+      brightGreen: '#a6e22e',
+      brightYellow: '#e6db74',
+      brightBlue: '#66d9ef',
+      brightMagenta: '#ae81ff',
+      brightCyan: '#a1efe4',
+      brightWhite: '#f9f8f5',
+    },
+    solarized: {
+      black: '#073642',
+      red: '#dc322f',
+      green: '#859900',
+      yellow: '#b58900',
+      blue: '#268bd2',
+      magenta: '#d33682',
+      cyan: '#2aa198',
+      white: '#eee8d5',
+      brightBlack: '#657b83',
+      brightRed: '#cb4b16',
+      brightGreen: '#a4b81c',
+      brightYellow: '#d6a400',
+      brightBlue: '#4fa3e0',
+      brightMagenta: '#6c71c4',
+      brightCyan: '#3cc0b5',
+      brightWhite: '#fdf6e3',
+    },
+  };
+
+  const FONT_SIZE_DEFAULT = 14;
+  let fontSize = clampFontSize(Number(localStorage.getItem('terminal-font-size')) || FONT_SIZE_DEFAULT);
 
   // Estado de la aplicación
   let tabs = [];
   let activeTab = null;
+  let currentThemeName = 'dark';
+  // Shells disponibles, shell por defecto, restaurar pestañas y carpeta personal (de main)
+  let config = { shells: [], defaultShell: null, restoreTabs: true, home: '', platform: '' };
+  const SESSION_KEY = 'terminal-session';
+  const MAX_RESTORED_TABS = 20;
 
-  // Inicializar con la primera sesión
-  window.terminal.onInitialSession(sessionId => {
-    createNewTab(sessionId);
-  });
+  // Cargar tema guardado
+  loadSavedTheme();
 
-  // Manejar eventos de terminal
-  window.terminal.onOutput((sessionId, data) => {
-    appendToOutput(sessionId, data);
-  });
-
-  window.terminal.onPrompt((sessionId, prompt) => {
-    updatePrompt(sessionId, prompt);
-  });
-
-  window.terminal.onClear(sessionId => {
-    clearTerminal(sessionId);
-  });
-
-  // Manejar eventos de pestañas
-  window.terminal.onNewTab(() => {
-    handleNewTab();
-  });
-
-  window.terminal.onCloseTab(() => {
-    if (activeTab) {
-      closeTab(activeTab.id);
+  // Salida y fin de cada shell
+  window.terminal.onData((sessionId, data) => {
+    const tab = findTab(sessionId);
+    if (tab) {
+      tab.term.write(data);
     }
   });
 
-  window.terminal.onNextTab(() => {
-    switchToNextTab();
+  window.terminal.onExit((sessionId, exitCode) => {
+    const tab = findTab(sessionId);
+    if (!tab) {
+      return;
+    }
+    tab.exited = true;
+    // Si la shell muere nada más arrancar no se cierra la pestaña (evita un bucle de pestañas
+    // nuevas que también fallan) y se deja el motivo a la vista
+    if (Date.now() - tab.createdAt < 1500) {
+      tab.term.write(`\r\n\x1b[31m[La shell terminó al iniciarse (código ${exitCode})]\x1b[0m\r\n`);
+      return;
+    }
+    // "exit" en la shell cierra la pestaña, como en cualquier terminal
+    closeTab(sessionId);
   });
 
-  window.terminal.onPrevTab(() => {
-    switchToPrevTab();
+  // Manejar eventos del menú
+  // Los callbacks del puente no deben devolver la pestaña (no se puede clonar entre contextos)
+  window.terminal.onNewTab(shellId => {
+    handleNewTab({ shellId });
   });
+  window.terminal.onCloseTab(() => {
+    if (activeTab) {
+      requestCloseTab(activeTab.id);
+    }
+  });
+  window.terminal.onBusyQuery(() => busyTabTitles());
+  window.terminal.onNextTab(() => switchToNextTab());
+  window.terminal.onPrevTab(() => switchToPrevTab());
+  window.terminal.onRenameTab(() => {
+    if (activeTab) {
+      startRenameTab(activeTab.id);
+    }
+  });
+  window.terminal.onFind(() => openSearch());
+  window.terminal.onFontSize(delta => setFontSize(delta === 0 ? FONT_SIZE_DEFAULT : fontSize + delta));
+  window.terminal.changeTheme(themeName => changeTheme(themeName));
+  window.terminal.showColorCustomizer(() => showColorCustomizer());
 
   // Event listener para el botón de nueva pestaña
-  newTabButton.addEventListener('click', handleNewTab);
+  newTabButton.addEventListener('click', () => handleNewTab());
+  shellMenuButton.addEventListener('click', () => {
+    const rect = shellMenuButton.getBoundingClientRect();
+    window.terminal.showShellMenu(rect.left, rect.bottom);
+  });
+  appMenuButton.addEventListener('click', () => {
+    const rect = appMenuButton.getBoundingClientRect();
+    window.terminal.showAppMenu(rect.left, rect.bottom);
+  });
 
-  // Funciones para manejar pestañas
-  function handleNewTab() {
-    const sessionId = 'session-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-    createNewTab(sessionId);
-    window.terminal.createSession(sessionId);
+  // Ajustar la terminal visible al tamaño de la ventana
+  let fitPending = false;
+  new ResizeObserver(() => {
+    if (fitPending) {
+      return;
+    }
+    fitPending = true;
+    requestAnimationFrame(() => {
+      fitPending = false;
+      fitActiveTab();
+    });
+  }).observe(terminalsContainer);
+
+  // Primeras pestañas: las de la sesión anterior o una nueva
+  init();
+
+  async function init() {
+    try {
+      config = await window.terminal.getConfig();
+    } catch (error) {
+      console.error('No se pudo leer la configuración:', error);
+    }
+    if (!(config.restoreTabs && (await restoreSession()))) {
+      handleNewTab();
+    }
   }
 
-  function createNewTab(sessionId) {
+  // Funciones para manejar pestañas
+  function findTab(sessionId) {
+    return tabs.find(t => t.id === sessionId);
+  }
+
+  function newSessionId() {
+    return 'session-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+  }
+
+  function handleNewTab(options = {}) {
+    return createNewTab(newSessionId(), options);
+  }
+
+  async function createNewTab(sessionId, { shellId = null, cwd = null, customTitle = null } = {}) {
     const tabNumber = tabs.length + 1;
-    const tabId = 'tab-' + sessionId;
 
     // Crear elemento de pestaña
     const tabElement = document.createElement('div');
     tabElement.className = 'tab';
-    tabElement.id = tabId;
+    tabElement.id = 'tab-' + sessionId;
     tabElement.innerHTML = `
       <span class="tab-title">Terminal ${tabNumber}</span>
       <span class="tab-close" title="Cerrar pestaña">×</span>
@@ -85,147 +222,285 @@ document.addEventListener('DOMContentLoaded', () => {
     const terminalInstance = document.createElement('div');
     terminalInstance.className = 'terminal-instance';
     terminalInstance.id = 'terminal-' + sessionId;
-    terminalInstance.innerHTML = `
-      <div class="terminal-output" id="output-${sessionId}"></div>
-      <div class="terminal-input-container">
-        <span class="terminal-prompt" id="prompt-${sessionId}"></span>
-        <input type="text" class="terminal-input" id="input-${sessionId}" autofocus>
-      </div>
-    `;
     terminalsContainer.appendChild(terminalInstance);
 
-    // Añadir mensaje de bienvenida
-    appendToOutput(sessionId, 'Bienvenid@ a HYPE Terminal ...');
+    const term = new Terminal({
+      fontFamily: "'Cascadia Mono', 'Cascadia Code', Consolas, Menlo, 'DejaVu Sans Mono', 'Courier New', monospace",
+      fontSize,
+      cursorBlink: true,
+      scrollback: 5000,
+      allowProposedApi: true,
+      theme: buildXtermTheme(),
+      // Hipervínculos OSC 8 (p. ej. los de ls --hyperlink): mismo criterio que las URLs de texto
+      linkHandler: { activate: openLink },
+    });
+    const fitAddon = new FitAddon();
+    const searchAddon = new SearchAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(searchAddon);
+    // URLs de la salida: se abren en el navegador con Ctrl+clic (Cmd+clic en macOS)
+    term.loadAddon(new WebLinksAddon(openLink));
 
-    // Configurar event listeners para la terminal
-    const inputElement = document.getElementById(`input-${sessionId}`);
+    const tab = {
+      id: sessionId,
+      element: tabElement,
+      terminal: terminalInstance,
+      term,
+      fitAddon,
+      searchAddon,
+      title: `Terminal ${tabNumber}`,
+      // Nombre puesto por el usuario; si es null, el título sigue al directorio actual
+      customTitle,
+      shellId,
+      shellName: '',
+      // Directorio actual: el que publica la shell en cada prompt (OSC 9;9 u OSC 7) o, hasta el
+      // primer prompt, el restaurado de la sesión anterior
+      cwd: null,
+      reportedCwd: null,
+      // La shell publica su prompt: se puede saber si hay un comando en marcha
+      reportsPrompt: false,
+      awaitingPrompt: false,
+      createdAt: Date.now(),
+      exited: false,
+    };
+    tabs.push(tab);
 
-    // Para almacenar las sugerencias de autocompletado
-    let completions = [];
-    let completionIndex = -1;
-    let originalInput = '';
+    // Activar antes de abrir: xterm necesita el contenedor visible para medir filas y columnas
+    activateTab(sessionId);
+    term.open(terminalInstance);
+    fitAddon.fit();
+    if (activeTab === tab) {
+      term.focus();
+    }
 
-    // Historial de comandos por pestaña
-    let commandHistory = [];
-    let historyIndex = -1;
-    let historyBuffer = '';
-
-    inputElement.addEventListener('keydown', async event => {
-      if (event.key === 'Enter') {
-        const command = inputElement.value;
-
-        // Añadir comando a la salida
-        const promptElement = document.getElementById(`prompt-${sessionId}`);
-        appendToOutput(sessionId, `${promptElement.textContent}${command}`);
-
-        // Enviar comando al proceso principal
-        if (command.trim()) {
-          commandHistory.push(command);
-          window.terminal.sendCommand(command, sessionId);
-        } else {
-          window.terminal.sendCommand('echo ""', sessionId);
+    term.attachCustomKeyEventHandler(event => handleTerminalKey(tab, event));
+    term.onData(data => {
+      // Enter: hasta el siguiente prompt hay un comando en marcha
+      if (data.includes('\r')) {
+        tab.awaitingPrompt = true;
+      }
+      window.terminal.write(sessionId, data);
+    });
+    term.onResize(({ cols, rows }) => window.terminal.resize(sessionId, cols, rows));
+    // Si la shell publica su directorio, el título sale de ahí; si no, del título que ponga ella
+    term.onTitleChange(title => {
+      if (!tab.cwd) {
+        updateTabTitle(sessionId, title);
+      }
+    });
+    // OSC 9;9;"ruta" (PowerShell, cmd, Git Bash) y OSC 7 file://host/ruta (bash, zsh, fish...)
+    term.parser.registerOscHandler(9, data => {
+      if (!data.startsWith('9;')) {
+        return false;
+      }
+      promptReported(tab, data.slice(2).replace(/^"(.*)"$/, '$1'));
+      return true;
+    });
+    term.parser.registerOscHandler(7, data => {
+      try {
+        const url = new URL(data);
+        let dir = decodeURIComponent(url.pathname);
+        // file:///C:/ruta en Windows
+        if (/^\/[A-Za-z]:/.test(dir)) {
+          dir = dir.slice(1).replace(/\//g, '\\');
         }
+        promptReported(tab, dir);
+      } catch (_error) {
+        // Secuencia mal formada: se ignora
+      }
+      return true;
+    });
+    searchAddon.onDidChangeResults(({ resultIndex, resultCount }) => {
+      if (activeTab === tab) {
+        updateSearchCount(resultIndex, resultCount);
+      }
+    });
 
-        // Limpiar el input, las sugerencias y el estado del historial
-        inputElement.value = '';
-        completions = [];
-        completionIndex = -1;
-        historyIndex = -1;
-        historyBuffer = '';
-      } else if (event.key === 'Tab') {
-        // Prevenir que el Tab cambie el foco
-        event.preventDefault();
-
-        // Si es la primera vez que presiona Tab, obtener sugerencias
-        if (completions.length === 0) {
-          originalInput = inputElement.value;
-          completions = await window.terminal.getCompletions(originalInput, sessionId);
-          completionIndex = 0;
-
-          if (completions.length === 0) {
-            // No hay sugerencias
-            return;
-          }
-
-          // Si solo hay una sugerencia, usarla directamente
-          if (completions.length === 1) {
-            inputElement.value = completions[0];
-            return;
-          }
-
-          // Si hay múltiples, mostrar la primera y listar todas
-          inputElement.value = completions[completionIndex];
-
-          // Mostrar todas las sugerencias
-          appendToOutput(sessionId, '\nSugerencias:');
-          completions.forEach(comp => appendToOutput(sessionId, `  ${comp}`));
-        } else {
-          // Si ya tiene sugerencias, rotar entre ellas
-          completionIndex = (completionIndex + 1) % completions.length;
-          inputElement.value = completions[completionIndex];
-        }
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        if (commandHistory.length === 0) {
-          return;
-        }
-        if (historyIndex === -1) {
-          historyBuffer = inputElement.value;
-          historyIndex = commandHistory.length - 1;
-        } else if (historyIndex > 0) {
-          historyIndex--;
-        }
-        inputElement.value = commandHistory[historyIndex];
-        completions = [];
-        completionIndex = -1;
-      } else if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        if (historyIndex === -1) {
-          return;
-        }
-        if (historyIndex < commandHistory.length - 1) {
-          historyIndex++;
-          inputElement.value = commandHistory[historyIndex];
-        } else {
-          historyIndex = -1;
-          inputElement.value = historyBuffer;
-        }
-        completions = [];
-        completionIndex = -1;
+    // Clic derecho: copiar si hay selección, si no pegar (como en Windows Terminal)
+    terminalInstance.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      term.focus();
+      if (term.hasSelection()) {
+        window.terminal.copyText(term.getSelection());
+        term.clearSelection();
       } else {
-        // Cualquier otra tecla reinicia las sugerencias
-        completions = [];
-        completionIndex = -1;
+        window.terminal.paste();
       }
     });
 
     // Agregar event listeners para la pestaña
     tabElement.addEventListener('click', e => {
-      // Ignorar si se hizo clic en el botón de cerrar
-      if (e.target.classList.contains('tab-close')) {
+      // Ignorar si se hizo clic en el botón de cerrar o en el campo de renombrar
+      if (e.target.classList.contains('tab-close') || e.target.classList.contains('tab-rename')) {
         return;
       }
-
-      // Activar esta pestaña
       activateTab(sessionId);
     });
 
-    const closeButton = tabElement.querySelector('.tab-close');
-    closeButton.addEventListener('click', e => {
+    // Doble clic para renombrar la pestaña
+    tabElement.addEventListener('dblclick', e => {
+      if (!e.target.classList.contains('tab-close')) {
+        startRenameTab(sessionId);
+      }
+    });
+
+    tabElement.querySelector('.tab-close').addEventListener('click', e => {
       e.stopPropagation();
-      closeTab(sessionId);
+      requestCloseTab(sessionId);
     });
 
-    // Añadir a la lista de pestañas
-    tabs.push({
-      id: sessionId,
-      element: tabElement,
-      terminal: terminalInstance,
-      title: `Terminal ${tabNumber}`,
-    });
+    renderTabTitle(tab);
+    const result = await window.terminal.createPty(sessionId, term.cols, term.rows, shellId, cwd);
+    if (!result.ok) {
+      tab.exited = true;
+      term.write(`\x1b[31m${result.error}\x1b[0m\r\n`);
+      return tab;
+    }
+    tab.shellId = result.shellId;
+    tab.shellName = result.shellName;
+    tab.cwd = tab.cwd || cwd;
+    renderTabTitle(tab);
+    saveSession();
+    return tab;
+  }
 
-    // Activar esta pestaña
-    activateTab(sessionId);
+  function openLink(event, uri) {
+    if (event.ctrlKey || event.metaKey) {
+      window.terminal.openExternal(uri);
+    }
+  }
+
+  // La shell ha mostrado su prompt en el directorio dir
+  function promptReported(tab, dir) {
+    tab.reportsPrompt = true;
+    tab.awaitingPrompt = false;
+    if (!dir || dir === tab.reportedCwd) {
+      return;
+    }
+    tab.reportedCwd = dir;
+    tab.cwd = dir;
+    updateTabTitle(tab.id, abbreviateHome(dir));
+    saveSession();
+  }
+
+  // C:\Users\ana\src → ~\src (sin distinguir mayúsculas en Windows)
+  function abbreviateHome(dir) {
+    const home = config.home;
+    if (!home) {
+      return dir;
+    }
+    const insensitive = config.platform === 'win32';
+    const a = insensitive ? dir.toLowerCase() : dir;
+    const h = insensitive ? home.toLowerCase() : home;
+    if (a === h) {
+      return '~';
+    }
+    if (a.startsWith(h) && /[\\/]/.test(dir[home.length])) {
+      return '~' + dir.slice(home.length);
+    }
+    return dir;
+  }
+
+  // ¿Tiene la pestaña un comando en marcha?
+  async function isTabBusy(tab) {
+    if (tab.exited) {
+      return false;
+    }
+    if (tab.reportsPrompt) {
+      return tab.awaitingPrompt;
+    }
+    // Shells que no publican su prompt (zsh...): proceso en primer plano (macOS/Linux)
+    return (await window.terminal.foregroundBusy(tab.id)) === true;
+  }
+
+  async function busyTabTitles() {
+    const result = [];
+    for (const tab of tabs) {
+      if (await isTabBusy(tab)) {
+        result.push(tab.customTitle || tab.title);
+      }
+    }
+    return result;
+  }
+
+  // Cerrar desde la interfaz: si hay un comando en marcha, pedir confirmación
+  async function requestCloseTab(sessionId) {
+    const tab = findTab(sessionId);
+    if (!tab) {
+      return;
+    }
+    if ((await isTabBusy(tab)) && !(await window.terminal.confirmCloseTab(tab.customTitle || tab.title))) {
+      tab.term.focus();
+      return;
+    }
+    closeTab(sessionId);
+  }
+
+  // Guardar las pestañas abiertas (shell, directorio y nombre) para restaurarlas al volver a abrir
+  function saveSession() {
+    const state = {
+      tabs: tabs.map(t => ({ shellId: t.shellId, cwd: t.cwd, customTitle: t.customTitle })),
+      active: Math.max(0, tabs.indexOf(activeTab)),
+    };
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(state));
+    } catch (_error) {
+      // Almacenamiento no disponible: no se restaurará
+    }
+  }
+
+  async function restoreSession() {
+    let state;
+    try {
+      state = JSON.parse(localStorage.getItem(SESSION_KEY));
+    } catch (_error) {
+      return false;
+    }
+    if (!state || !Array.isArray(state.tabs) || state.tabs.length === 0) {
+      return false;
+    }
+    const saved = state.tabs.slice(0, MAX_RESTORED_TABS);
+    const created = [];
+    for (const t of saved) {
+      created.push(
+        await createNewTab(newSessionId(), {
+          shellId: typeof t.shellId === 'string' ? t.shellId : null,
+          cwd: typeof t.cwd === 'string' ? t.cwd : null,
+          customTitle: typeof t.customTitle === 'string' && t.customTitle ? t.customTitle.slice(0, 40) : null,
+        })
+      );
+    }
+    const active = created[Number.isInteger(state.active) ? state.active : 0];
+    if (active) {
+      activateTab(active.id);
+    }
+    return true;
+  }
+
+  // Atajos que no deben llegar a la shell: los gestiona el menú de la aplicación
+  function handleTerminalKey(tab, event) {
+    if (event.type !== 'keydown') {
+      return true;
+    }
+    const key = event.key.toLowerCase();
+
+    // F2 (renombrar) y Ctrl+Tab / Ctrl+Shift+Tab (cambiar de pestaña, también en macOS)
+    if (event.key === 'F2' || (event.key === 'Tab' && event.ctrlKey)) {
+      return false;
+    }
+    if (isMac || !event.ctrlKey || event.altKey) {
+      // En macOS los atajos van con Cmd y xterm.js no los intercepta
+      return true;
+    }
+    // Ctrl+C con texto seleccionado copia; sin selección llega a la shell como interrupción
+    if (key === 'c' && !event.shiftKey) {
+      return !tab.term.hasSelection();
+    }
+    // Ctrl+V pega; Ctrl+T/W/F/Tab y el zoom son atajos del menú
+    if (['v', 't', 'w', 'f', '=', '+', '-', '0'].includes(key)) {
+      return false;
+    }
+    return true;
   }
 
   function activateTab(sessionId) {
@@ -236,18 +511,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Encontrar y activar la nueva pestaña
-    const tab = tabs.find(t => t.id === sessionId);
+    const tab = findTab(sessionId);
     if (tab) {
       tab.element.classList.add('active');
       tab.terminal.classList.add('active');
+      tab.element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       activeTab = tab;
+      closeSearch(false);
+      fitActiveTab();
+      tab.term.focus();
+      saveSession();
+    }
+  }
 
-      // Enfocar el input
-      const inputElement = document.getElementById(`input-${sessionId}`);
-      inputElement.focus();
-
-      // Informar al proceso principal
-      window.terminal.switchSession(sessionId);
+  function fitActiveTab() {
+    if (activeTab && activeTab.term.element) {
+      activeTab.fitAddon.fit();
     }
   }
 
@@ -256,23 +535,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tabIndex === -1) {
       return;
     }
+    const tab = tabs[tabIndex];
 
-    // Remover elementos del DOM
-    tabs[tabIndex].element.remove();
-    tabs[tabIndex].terminal.remove();
-
-    // Informar al proceso principal
-    window.terminal.closeSession(sessionId);
-
-    // Remover de la lista
+    // Cerrar la shell y liberar la terminal
+    if (!tab.exited) {
+      window.terminal.kill(sessionId);
+    }
+    tab.term.dispose();
+    tab.element.remove();
+    tab.terminal.remove();
     tabs.splice(tabIndex, 1);
+    saveSession();
 
     // Si era la pestaña activa, activar otra
     if (activeTab && activeTab.id === sessionId) {
+      activeTab = null;
       if (tabs.length > 0) {
-        // Activar la pestaña anterior o la siguiente
-        const newIndex = Math.min(tabIndex, tabs.length - 1);
-        activateTab(tabs[newIndex].id);
+        activateTab(tabs[Math.min(tabIndex, tabs.length - 1)].id);
       } else {
         // No hay más pestañas, crear una nueva
         handleNewTab();
@@ -284,143 +563,267 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tabs.length <= 1) {
       return;
     }
-
     const currentIndex = tabs.findIndex(t => t.id === activeTab.id);
-    const nextIndex = (currentIndex + 1) % tabs.length;
-    activateTab(tabs[nextIndex].id);
+    activateTab(tabs[(currentIndex + 1) % tabs.length].id);
   }
 
   function switchToPrevTab() {
     if (tabs.length <= 1) {
       return;
     }
-
     const currentIndex = tabs.findIndex(t => t.id === activeTab.id);
-    const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-    activateTab(tabs[prevIndex].id);
+    activateTab(tabs[(currentIndex - 1 + tabs.length) % tabs.length].id);
   }
 
-  // Funciones para manejar la salida de la terminal
-  function appendToOutput(sessionId, text) {
-    const outputElement = document.getElementById(`output-${sessionId}`);
-    if (!outputElement) {
+  // El título lo publica la shell (en PowerShell y bash, el directorio actual)
+  function updateTabTitle(sessionId, title) {
+    const tab = findTab(sessionId);
+    if (!tab || !title) {
       return;
     }
-    const lines = text.split('\n');
-    lines.forEach((line, i) => {
-      if (i === lines.length - 1 && line === '') {
+    let dirName = title.trim();
+    if (dirName.length > 20) {
+      const parts = dirName.split(/[\\/]/);
+      dirName = parts.filter(p => p.length > 0).pop() || dirName;
+    }
+    tab.title = dirName;
+    tab.fullTitle = title.trim();
+    renderTabTitle(tab);
+  }
+
+  function renderTabTitle(tab) {
+    const titleElement = tab.element.querySelector('.tab-title');
+    const fullTitle = tab.fullTitle || tab.title;
+    titleElement.textContent = tab.customTitle || tab.title;
+    const tooltip = tab.customTitle ? `${tab.customTitle} — ${fullTitle}` : fullTitle;
+    titleElement.title = tab.shellName ? `${tooltip} · ${tab.shellName}` : tooltip;
+  }
+
+  // Renombrar una pestaña: Enter guarda, Escape cancela; un nombre vacío vuelve al título automático
+  function startRenameTab(sessionId) {
+    const tab = findTab(sessionId);
+    if (!tab || tab.element.querySelector('.tab-rename')) {
+      return;
+    }
+    const titleElement = tab.element.querySelector('.tab-title');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-rename';
+    input.maxLength = 40;
+    input.value = tab.customTitle || tab.title;
+    input.setAttribute('aria-label', 'Nombre de la pestaña');
+    titleElement.hidden = true;
+    tab.element.insertBefore(input, titleElement);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = save => {
+      if (finished) {
         return;
       }
-      const div = document.createElement('div');
-      div.textContent = line;
-      outputElement.appendChild(div);
+      finished = true;
+      if (save) {
+        tab.customTitle = input.value.trim() || null;
+        saveSession();
+      }
+      input.remove();
+      titleElement.hidden = false;
+      renderTabTitle(tab);
+      if (activeTab === tab) {
+        tab.term.focus();
+      }
+    };
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        finish(false);
+      }
     });
-    outputElement.scrollTop = outputElement.scrollHeight;
+    input.addEventListener('blur', () => finish(true));
   }
 
-  function updatePrompt(sessionId, prompt) {
-    const promptElement = document.getElementById(`prompt-${sessionId}`);
-    if (!promptElement) {
+  // Búsqueda en la salida de la pestaña activa
+  function searchOptions(incremental = false) {
+    const style = getComputedStyle(document.body);
+    const accent = style.getPropertyValue('--prompt-color').trim();
+    return {
+      incremental,
+      decorations: {
+        matchBackground: rgbToHex(style.getPropertyValue('--selection-color').trim()),
+        activeMatchBackground: rgbToHex(accent),
+        matchOverviewRuler: rgbToHex(accent),
+        activeMatchColorOverviewRuler: rgbToHex(accent),
+      },
+    };
+  }
+
+  function openSearch() {
+    if (!activeTab) {
       return;
     }
-
-    promptElement.textContent = prompt;
-
-    // Enfocar el input
-    if (activeTab && activeTab.id === sessionId) {
-      const inputElement = document.getElementById(`input-${sessionId}`);
-      inputElement.focus();
+    searchBar.hidden = false;
+    const selection = activeTab.term.getSelection();
+    if (selection && !selection.includes('\n')) {
+      searchInput.value = selection;
     }
-
-    // Actualizar el título de la pestaña con el directorio actual
-    updateTabTitle(sessionId, prompt);
-  }
-
-  function updateTabTitle(sessionId, prompt) {
-    let dirName = 'Terminal';
-    if (prompt) {
-      let dirPath = null;
-      // Windows PS: "PS C:\path\to\dir> " o "PS ~\dir> "
-      const winMatch = prompt.match(/^PS (.+?)>\s*$/);
-      // Unix: "user@host:path$ "
-      const unixMatch = prompt.match(/:(.+?)\$\s*$/);
-      if (winMatch) {
-        dirPath = winMatch[1];
-      } else if (unixMatch) {
-        dirPath = unixMatch[1];
-      }
-      if (dirPath) {
-        dirName = dirPath.trim();
-        if (dirName.length > 20) {
-          const parts = dirName.split(/[\\/]/);
-          dirName = parts.filter(p => p.length > 0).pop() || dirName;
-        }
-      }
-    }
-    const tab = tabs.find(t => t.id === sessionId);
-    if (tab) {
-      tab.title = dirName;
-      const titleElement = tab.element.querySelector('.tab-title');
-      titleElement.textContent = dirName;
+    searchInput.focus();
+    searchInput.select();
+    if (searchInput.value) {
+      activeTab.searchAddon.findNext(searchInput.value, searchOptions(true));
     }
   }
 
-  function clearTerminal(sessionId) {
-    const outputElement = document.getElementById(`output-${sessionId}`);
-    if (!outputElement) {
+  function closeSearch(focusTerminal = true) {
+    if (searchBar.hidden) {
       return;
     }
+    searchBar.hidden = true;
+    searchCount.textContent = '';
+    tabs.forEach(t => t.searchAddon.clearDecorations());
+    if (focusTerminal && activeTab) {
+      activeTab.term.focus();
+    }
+  }
 
-    outputElement.innerHTML = '';
+  function findInActiveTab(backwards = false) {
+    if (!activeTab || !searchInput.value) {
+      searchCount.textContent = '';
+      return;
+    }
+    const found = backwards
+      ? activeTab.searchAddon.findPrevious(searchInput.value, searchOptions())
+      : activeTab.searchAddon.findNext(searchInput.value, searchOptions());
+    if (!found) {
+      searchCount.textContent = 'Sin resultados';
+    }
+  }
+
+  function updateSearchCount(resultIndex, resultCount) {
+    if (!searchInput.value) {
+      searchCount.textContent = '';
+    } else if (resultCount === 0) {
+      searchCount.textContent = 'Sin resultados';
+    } else if (resultIndex >= 0) {
+      searchCount.textContent = `${resultIndex + 1} de ${resultCount}`;
+    } else {
+      searchCount.textContent = `${resultCount}+`;
+    }
+  }
+
+  searchInput.addEventListener('input', () => {
+    if (activeTab && searchInput.value) {
+      activeTab.searchAddon.findNext(searchInput.value, searchOptions(true));
+    } else {
+      activeTab?.searchAddon.clearDecorations();
+      searchCount.textContent = '';
+    }
+  });
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      findInActiveTab(e.shiftKey);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeSearch();
+    }
+  });
+  document.getElementById('search-prev').addEventListener('click', () => findInActiveTab(true));
+  document.getElementById('search-next').addEventListener('click', () => findInActiveTab(false));
+  document.getElementById('search-close').addEventListener('click', () => closeSearch());
+
+  // Tamaño del texto (Ctrl + / Ctrl - / Ctrl 0)
+  function clampFontSize(size) {
+    return Math.min(32, Math.max(8, size));
+  }
+
+  function setFontSize(size) {
+    fontSize = clampFontSize(size);
+    localStorage.setItem('terminal-font-size', String(fontSize));
+    tabs.forEach(t => {
+      t.term.options.fontSize = fontSize;
+    });
+    fitActiveTab();
   }
 
   // Funciones para temas y personalización
 
+  // Tema de xterm.js a partir de las variables CSS del tema activo (o de los colores personalizados)
+  function buildXtermTheme() {
+    const style = getComputedStyle(document.body);
+    const background = rgbToHex(style.getPropertyValue('--background-color').trim());
+    return {
+      background,
+      foreground: rgbToHex(style.getPropertyValue('--text-color').trim()),
+      cursor: rgbToHex(style.getPropertyValue('--prompt-color').trim()),
+      cursorAccent: background,
+      selectionBackground: rgbToHex(style.getPropertyValue('--selection-color').trim()),
+      ...(ANSI_PALETTES[currentThemeName] || {}),
+    };
+  }
+
+  function refreshTerminalThemes() {
+    const theme = buildXtermTheme();
+    tabs.forEach(t => {
+      t.term.options.theme = theme;
+    });
+    // Botones nativos de la ventana con los colores de la barra de pestañas
+    window.terminal.setTitleBarColors(theme.background, theme.foreground);
+  }
+
   // Cambiar a un tema predefinido
   function changeTheme(themeName) {
     // Primero remover todas las clases de tema
-    document.body.classList.remove(
-      'theme-dark',
-      'theme-light',
-      'theme-monokai',
-      'theme-solarized',
-      'theme-retro',
-      'theme-hacker'
-    );
+    document.body.classList.remove(...THEMES.map(t => `theme-${t}`));
 
     // Si no es "dark" (default), añadir la clase adecuada
-    if (themeName !== 'dark') {
+    if (THEMES.includes(themeName) && themeName !== 'dark') {
       document.body.classList.add(`theme-${themeName}`);
     }
+    currentThemeName = THEMES.includes(themeName) ? themeName : 'dark';
+
+    // Un tema predefinido descarta los colores personalizados: si no, al elegir
+    // "Oscuro" se seguían viendo los colores personalizados
+    clearCustomColors();
 
     // Guardar preferencia
     localStorage.setItem('terminal-theme', themeName);
 
-    // Actualizar los campos del personalizador con los colores actuales
+    // Actualizar los campos del personalizador y las terminales con los colores actuales
     updateColorInputs();
+    refreshTerminalThemes();
   }
 
   // Cargar tema guardado
   function loadSavedTheme() {
     const savedTheme = localStorage.getItem('terminal-theme');
-    if (savedTheme) {
-      changeTheme(savedTheme);
-    }
-
-    // Verificar si hay colores personalizados guardados
     const customColors = localStorage.getItem('terminal-custom-colors');
-    if (customColors) {
+
+    if (savedTheme === 'custom' && customColors) {
       try {
         applyCustomColors(JSON.parse(customColors));
       } catch (_e) {
         localStorage.removeItem('terminal-custom-colors');
       }
+    } else if (THEMES.includes(savedTheme)) {
+      changeTheme(savedTheme);
     }
+  }
+
+  // Quitar los colores personalizados aplicados y guardados
+  function clearCustomColors() {
+    CUSTOM_PROPERTIES.forEach(prop => document.documentElement.style.removeProperty(prop));
+    localStorage.removeItem('terminal-custom-colors');
   }
 
   // Actualizar los inputs de color con los valores actuales de CSS
   function updateColorInputs() {
-    const computedStyle = getComputedStyle(document.documentElement);
+    // Los temas definen sus variables en <body>: leerlas de ahí y no de <html>
+    const computedStyle = getComputedStyle(document.body);
     backgroundColorInput.value = rgbToHex(computedStyle.getPropertyValue('--background-color').trim());
     textColorInput.value = rgbToHex(computedStyle.getPropertyValue('--text-color').trim());
     promptColorInput.value = rgbToHex(computedStyle.getPropertyValue('--prompt-color').trim());
@@ -429,7 +832,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Convertir valor RGB a Hex para los inputs de color
   function rgbToHex(rgb) {
-    // Si ya es un color hex, devolverlo
+    // Si ya es un color hex, devolverlo (expandiendo #0f0 → #00ff00, que el input de color no acepta)
+    if (/^#[0-9a-f]{3}$/i.test(rgb)) {
+      return '#' + [...rgb.slice(1)].map(c => c + c).join('');
+    }
     if (rgb.startsWith('#')) {
       return rgb;
     }
@@ -447,8 +853,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return '#000000';
   }
 
-  // Aplicar colores personalizados
+  // Aplicar colores personalizados (sobre la base del tema oscuro)
   function applyCustomColors(colors) {
+    document.body.classList.remove(...THEMES.map(t => `theme-${t}`));
+    currentThemeName = 'dark';
     document.documentElement.style.setProperty('--background-color', colors.background);
     document.documentElement.style.setProperty('--text-color', colors.text);
     document.documentElement.style.setProperty('--prompt-color', colors.prompt);
@@ -456,6 +864,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Guardar en localStorage
     localStorage.setItem('terminal-custom-colors', JSON.stringify(colors));
+    localStorage.setItem('terminal-theme', 'custom');
+    refreshTerminalThemes();
   }
 
   // Mostrar el personalizador de colores
@@ -464,46 +874,21 @@ document.addEventListener('DOMContentLoaded', () => {
     colorCustomizer.style.display = 'block';
   }
 
+  function hideColorCustomizer() {
+    colorCustomizer.style.display = 'none';
+    activeTab?.term.focus();
+  }
+
   // Escuchar eventos de los botones del personalizador
   applyColorsButton.addEventListener('click', () => {
-    const colors = {
+    applyCustomColors({
       background: backgroundColorInput.value,
       text: textColorInput.value,
       prompt: promptColorInput.value,
       selection: selectionColorInput.value,
-    };
-
-    applyCustomColors(colors);
-    colorCustomizer.style.display = 'none';
-
-    // Remover todas las clases de tema
-    document.body.classList.remove(
-      'theme-dark',
-      'theme-light',
-      'theme-monokai',
-      'theme-solarized',
-      'theme-retro',
-      'theme-hacker'
-    );
-
-    // Guardar como tema personalizado
-    localStorage.setItem('terminal-theme', 'custom');
+    });
+    hideColorCustomizer();
   });
 
-  cancelColorsButton.addEventListener('click', () => {
-    colorCustomizer.style.display = 'none';
-  });
-
-  // Escuchar eventos del proceso principal
-  window.terminal.changeTheme(themeName => {
-    changeTheme(themeName);
-  });
-
-  window.terminal.showColorCustomizer(() => {
-    showColorCustomizer();
-  });
-
-  window.terminal.applyCustomColors(colors => {
-    applyCustomColors(colors);
-  });
+  cancelColorsButton.addEventListener('click', hideColorCustomizer);
 });

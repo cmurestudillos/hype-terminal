@@ -1,6 +1,6 @@
 {
   "name": "hype-terminal",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Una aplicación de terminal creada con Electron",
   "main": "main.js",
   "scripts": {
@@ -32,16 +32,50 @@
     "directories": {
       "output": "release/"
     },
+    "files": [
+      "**/*",
+      "!docs{,/**/*}",
+      "!.github{,/**/*}",
+      "!.vscode{,/**/*}",
+      "!release{,/**/*}"
+    ],
+    "asarUnpack": [
+      "**/node_modules/node-pty/**"
+    ],
+    "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "cmurestudillos",
+      "repo": "hype-terminal",
+      "releaseType": "draft"
+    },
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "assets/icon.icns"
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
     },
     "win": {
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "target": "nsis"
     },
     "linux": {
       "icon": "assets/icon.png",
-      "category": "Development"
+      "category": "Development",
+      "target": "AppImage"
     }
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.1.0"
   }
 }

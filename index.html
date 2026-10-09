@@ -1,17 +1,37 @@
 <!doctype html>
-<html>
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
     <title>HYPE Terminal</title>
+    <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div id="terminal-app">
       <div id="tabs-container">
         <div id="tabs"></div>
-        <button id="new-tab-button">+</button>
+        <button id="new-tab-button" title="Nueva pestaña (Ctrl+T)" aria-label="Nueva pestaña">+</button>
+        <button id="shell-menu-button" title="Nueva pestaña con otra shell" aria-label="Elegir shell">▾</button>
+        <button id="app-menu-button" title="Menú" aria-label="Menú de la aplicación">☰</button>
+        <div class="title-spacer"></div>
       </div>
-      <div id="terminals-container"></div>
+      <div id="terminals-container">
+        <div id="search-bar" class="search-bar" role="search" hidden>
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Buscar"
+            aria-label="Buscar en la terminal"
+            spellcheck="false" />
+          <span id="search-count" class="search-count" aria-live="polite"></span>
+          <button id="search-prev" title="Anterior (Mayús+Enter)" aria-label="Resultado anterior">↑</button>
+          <button id="search-next" title="Siguiente (Enter)" aria-label="Resultado siguiente">↓</button>
+          <button id="search-close" title="Cerrar (Esc)" aria-label="Cerrar búsqueda">×</button>
+        </div>
+      </div>
     </div>
 
     <div id="color-customizer" class="color-customizer">
@@ -25,7 +45,7 @@
         <input type="color" id="text-color" name="text-color" />
       </div>
       <div class="color-field">
-        <label for="prompt-color">Color de Prompt:</label>
+        <label for="prompt-color">Color de Cursor y Acento:</label>
         <input type="color" id="prompt-color" name="prompt-color" />
       </div>
       <div class="color-field">
@@ -38,6 +58,10 @@
       </div>
     </div>
 
+    <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+    <script src="node_modules/@xterm/addon-search/lib/addon-search.js"></script>
+    <script src="node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>
