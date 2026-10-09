@@ -281,7 +281,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const key = event.key.toLowerCase();
 
-    if (event.key === 'F2') {
+    // F2 (renombrar) y Ctrl+Tab / Ctrl+Shift+Tab (cambiar de pestaña, también en macOS)
+    if (event.key === 'F2' || (event.key === 'Tab' && event.ctrlKey)) {
       return false;
     }
     if (isMac || !event.ctrlKey || event.altKey) {
@@ -293,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return !tab.term.hasSelection();
     }
     // Ctrl+V pega; Ctrl+T/W/F/Tab y el zoom son atajos del menú
-    if (['v', 't', 'w', 'f', 'tab', '=', '+', '-', '0'].includes(key)) {
+    if (['v', 't', 'w', 'f', '=', '+', '-', '0'].includes(key)) {
       return false;
     }
     return true;

@@ -160,12 +160,13 @@ function createWindow() {
         { type: 'separator' },
         {
           label: 'Pestaña Siguiente',
-          accelerator: 'CmdOrCtrl+Tab',
+          // Ctrl también en macOS: Cmd+Tab es el selector de aplicaciones del sistema
+          accelerator: 'Ctrl+Tab',
           click: () => sendToWindow('next-tab'),
         },
         {
           label: 'Pestaña Anterior',
-          accelerator: 'CmdOrCtrl+Shift+Tab',
+          accelerator: 'Ctrl+Shift+Tab',
           click: () => sendToWindow('prev-tab'),
         },
       ],
