@@ -128,46 +128,85 @@ body {
 
 .terminal-instance {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   display: none;
-  flex-direction: column;
+  padding: 6px 0 0 8px;
+  background-color: var(--background-color);
+  box-sizing: border-box;
 }
 
 .terminal-instance.active {
+  display: block;
+}
+
+/* xterm.js ocupa todo el contenedor; el fondo lo pinta su propio tema */
+.terminal-instance .xterm {
+  height: 100%;
+}
+
+.terminal-instance .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--selection-color) transparent;
+}
+
+/* Barra de búsqueda (Ctrl+F) */
+.search-bar {
+  position: absolute;
+  top: 8px;
+  right: 24px;
+  z-index: 10;
   display: flex;
-}
-
-.terminal-output {
-  flex-grow: 1;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  padding: 10px;
-  background-color: var(--background-color);
-  border-bottom: 1px solid var(--selection-color);
-}
-
-.terminal-input-container {
-  display: flex;
-  padding: 10px;
-  background-color: var(--background-color);
-}
-
-.terminal-prompt {
-  color: var(--prompt-color);
-  margin-right: 5px;
-}
-
-.terminal-input {
-  flex-grow: 1;
-  background-color: transparent;
-  border: none;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background-color: var(--tab-active-color);
   color: var(--text-color);
-  font-family: 'Courier New', monospace;
-  font-size: 16px;
+  border: 1px solid var(--tab-border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.search-bar[hidden] {
+  display: none;
+}
+
+.search-bar input {
+  width: 200px;
+  padding: 4px 6px;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  border: 1px solid var(--tab-border-color);
+  border-radius: 4px;
+  font: inherit;
   outline: none;
+}
+
+.search-bar input:focus {
+  border-color: var(--prompt-color);
+}
+
+.search-count {
+  min-width: 84px;
+  text-align: center;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.search-bar button {
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  color: var(--text-color);
+  border: none;
+  border-radius: 4px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.search-bar button:hover {
+  background-color: var(--tab-hover-color);
 }
 
 /* Selector de color */

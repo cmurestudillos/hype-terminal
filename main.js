@@ -1,16 +1,50 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, shell, clipboard } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
 const os = require('os');
-const fs = require('fs');
+const pty = require('node-pty');
 
 let mainWindow;
-let sessions = {};
+
+// Una pseudo-terminal (shell real) por pestaña: sessionId → { pty, buffer, flushTimer }
+const sessions = new Map();
+
+// PowerShell: envolver el prompt del usuario para que publique el directorio actual como título
+// de la ventana (ConPTY lo traduce a la secuencia OSC que xterm.js recibe con onTitleChange).
+// El home se abrevia con ~ solo si es prefijo real de la ruta.
+const POWERSHELL_INIT = `
+$global:__hypePrompt = $function:prompt
+function global:prompt {
+  $loc = $executionContext.SessionState.Path.CurrentLocation
+  $p = if ($loc.ProviderPath) { $loc.ProviderPath } else { $loc.Path }
+  if ($HOME -and $p.StartsWith($HOME, [StringComparison]::OrdinalIgnoreCase) -and
+      ($p.Length -eq $HOME.Length -or $p[$HOME.Length] -eq '\\')) {
+    $p = '~' + $p.Substring($HOME.Length)
+  }
+  $Host.UI.RawUI.WindowTitle = $p
+  & $global:__hypePrompt
+}
+`;
+
+// Bash: mismo título con el directorio actual. zsh y otras shells no tienen este hook: la pestaña
+// muestra "Terminal N" salvo que su configuración publique el título (p. ej. oh-my-zsh)
+const BASH_PROMPT_COMMAND = 'printf "\\033]0;%s\\007" "${PWD/#$HOME/\\~}"';
+
+function shellCommand() {
+  if (process.platform === 'win32') {
+    const encoded = Buffer.from(POWERSHELL_INIT, 'utf16le').toString('base64');
+    return { file: 'powershell.exe', args: ['-NoLogo', '-NoExit', '-EncodedCommand', encoded] };
+  }
+  const file = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');
+  // En macOS los terminales abren shells de login (carga ~/.zprofile, PATH de Homebrew...)
+  return { file, args: process.platform === 'darwin' ? ['-l'] : [] };
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
+    title: 'HYPE Terminal',
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -20,7 +54,7 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
 
-  // Crear menú para cambio de temas
+  // Crear menú de la aplicación
   const menu = Menu.buildFromTemplate([
     {
       label: 'Archivo',
@@ -37,9 +71,15 @@ function createWindow() {
     {
       label: 'Editar',
       submenu: [
-        { role: 'cut', label: 'Cortar' },
         { role: 'copy', label: 'Copiar' },
         { role: 'paste', label: 'Pegar' },
+        { role: 'selectAll', label: 'Seleccionar todo' },
+        { type: 'separator' },
+        {
+          label: 'Buscar...',
+          accelerator: 'CmdOrCtrl+F',
+          click: () => sendToWindow('find'),
+        },
       ],
     },
     {
@@ -79,10 +119,23 @@ function createWindow() {
         },
         {
           label: 'Personalizar Colores...',
-          click: () => {
-            // Enviar evento para mostrar el personalizador de colores
-            sendToWindow('show-color-customizer');
-          },
+          click: () => sendToWindow('show-color-customizer'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Aumentar Texto',
+          accelerator: 'CmdOrCtrl+=',
+          click: () => sendToWindow('font-size', 1),
+        },
+        {
+          label: 'Reducir Texto',
+          accelerator: 'CmdOrCtrl+-',
+          click: () => sendToWindow('font-size', -1),
+        },
+        {
+          label: 'Tamaño de Texto Normal',
+          accelerator: 'CmdOrCtrl+0',
+          click: () => sendToWindow('font-size', 0),
         },
       ],
     },
@@ -117,31 +170,54 @@ function createWindow() {
         },
       ],
     },
+    {
+      label: 'Ayuda',
+      submenu: [
+        {
+          label: 'Sitio web',
+          click: () => shell.openExternal('https://cmurestudillos.github.io/hype-terminal/'),
+        },
+        {
+          label: 'Reportar un problema',
+          click: () => shell.openExternal('https://github.com/cmurestudillos/hype-terminal/issues'),
+        },
+        { type: 'separator' },
+        { label: 'Acerca de HYPE Terminal', click: showAbout },
+      ],
+    },
   ]);
 
   Menu.setApplicationMenu(menu);
+
+  // Al recargar (Ver › Recargar) las pestañas de la página anterior desaparecen: cerrar sus shells
+  mainWindow.webContents.on('did-start-loading', closeAllSessions);
 
   mainWindow.on('closed', () => {
     closeAllSessions();
     mainWindow = null;
   });
+}
 
-  // Crear la primera sesión cada vez que la página termina de cargar (también tras Ver › Recargar).
-  // Con un retraso fijo la sesión se perdía si el renderer tardaba más en registrar sus listeners,
-  // y al recargar la ventana quedaba sin pestañas.
-  mainWindow.webContents.on('did-finish-load', () => {
-    // Las sesiones de la página anterior ya no tienen pestaña
-    closeAllSessions();
-
-    const initialSessionId = generateSessionId();
-    sessions[initialSessionId] = {
-      directory: os.homedir(),
-      history: [],
-      processes: new Set(),
-    };
-    mainWindow.webContents.send('initial-session', initialSessionId);
-    sendPromptForSession(initialSessionId);
-  });
+function showAbout() {
+  const options = {
+    type: 'info',
+    title: 'Acerca de HYPE Terminal',
+    message: `HYPE Terminal ${app.getVersion()}`,
+    detail: [
+      `Electron ${process.versions.electron}`,
+      `Chromium ${process.versions.chrome}`,
+      `Node.js ${process.versions.node}`,
+      '',
+      'Licencia MIT · Carlos Mur',
+      'https://github.com/cmurestudillos/hype-terminal',
+    ].join('\n'),
+    buttons: ['Aceptar'],
+  };
+  if (mainWindow) {
+    dialog.showMessageBox(mainWindow, options);
+  } else {
+    dialog.showMessageBox(options);
+  }
 }
 
 // Enviar un evento a la ventana si sigue abierta (en macOS el menú existe sin ventana)
@@ -151,351 +227,122 @@ function sendToWindow(channel, ...args) {
   }
 }
 
-// Registrar manejador para cambio de color personalizado (una sola vez: en macOS
-// la ventana puede crearse varias veces con "activate")
-ipcMain.on('set-custom-colors', (event, colors) => {
-  // Guardar colores en localStorage (se hace en el frontend)
-  sendToWindow('apply-custom-colors', colors);
-});
+// La salida de la shell llega en muchos trozos pequeños: agruparlos reduce los mensajes IPC
+function queueOutput(sessionId, session, data) {
+  session.buffer += data;
+  if (!session.flushTimer) {
+    session.flushTimer = setTimeout(() => {
+      session.flushTimer = null;
+      const output = session.buffer;
+      session.buffer = '';
+      sendToWindow('pty-data', { sessionId, data: output });
+    }, 5);
+  }
+}
 
-// Terminar un comando y todos sus descendientes. proc.kill() solo mata powershell/bash:
-// un "ping -t" o un servidor lanzado desde ellos seguiría vivo.
-function killProcessTree(proc) {
-  if (proc.exitCode !== null || proc.signalCode !== null) {
+function closeSession(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) {
     return;
   }
+  sessions.delete(sessionId);
+  clearTimeout(session.flushTimer);
   try {
-    if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true });
-    } else {
-      // El proceso se lanza como líder de su propio grupo (detached): se señaliza el grupo entero
-      process.kill(-proc.pid, 'SIGKILL');
-    }
+    session.pty.kill();
   } catch (_error) {
-    proc.kill();
-  }
-}
-
-// Interrumpir los comandos en curso de una sesión (Ctrl+C). Devuelve si había alguno.
-function interruptSession(sessionId) {
-  const session = sessions[sessionId];
-  if (!session || session.processes.size === 0) {
-    return false;
-  }
-  session.processes.forEach(killProcessTree);
-  return true;
-}
-
-// Cerrar una sesión y terminar sus comandos en curso
-function closeSession(sessionId) {
-  if (sessions[sessionId]) {
-    interruptSession(sessionId);
-    delete sessions[sessionId];
+    // La shell ya había terminado
   }
 }
 
 function closeAllSessions() {
-  Object.keys(sessions).forEach(closeSession);
+  [...sessions.keys()].forEach(closeSession);
 }
 
-// Función para generar un ID de sesión único
-function generateSessionId() {
-  return 'session-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-}
+const validSize = n => Number.isInteger(n) && n > 0 && n < 1000;
 
-// Registrar eventos para la gestión de sesiones
-ipcMain.on('create-session', (event, sessionId) => {
-  sessions[sessionId] = {
-    directory: os.homedir(),
-    history: [],
-    processes: new Set(),
-  };
-  sendPromptForSession(sessionId);
+// Crear la shell de una pestaña nueva
+ipcMain.handle('pty-create', (event, { sessionId, cols, rows }) => {
+  if (typeof sessionId !== 'string' || sessions.has(sessionId)) {
+    return { ok: false, error: 'Sesión no válida' };
+  }
+  const { file, args } = shellCommand();
+  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'HYPE-Terminal' };
+  if (path.basename(file) === 'bash' && !env.PROMPT_COMMAND) {
+    env.PROMPT_COMMAND = BASH_PROMPT_COMMAND;
+  }
+
+  let proc;
+  try {
+    proc = pty.spawn(file, args, {
+      name: 'xterm-256color',
+      cols: validSize(cols) ? cols : 80,
+      rows: validSize(rows) ? rows : 24,
+      cwd: os.homedir(),
+      env,
+      // Windows: ConPTY incluido en node-pty (el de Windows Terminal) en lugar del del sistema;
+      // además kill() no necesita lanzar un proceso auxiliar para listar los hijos de la consola
+      useConptyDll: true,
+    });
+  } catch (error) {
+    console.error('No se pudo iniciar la shell:', error);
+    return { ok: false, error: `No se pudo iniciar ${file}: ${error.message}` };
+  }
+
+  const session = { pty: proc, buffer: '', flushTimer: null };
+  sessions.set(sessionId, session);
+
+  proc.onData(data => queueOutput(sessionId, session, data));
+  proc.onExit(({ exitCode }) => {
+    // Enviar lo que quede pendiente antes de avisar del cierre
+    if (session.flushTimer) {
+      clearTimeout(session.flushTimer);
+      session.flushTimer = null;
+      sendToWindow('pty-data', { sessionId, data: session.buffer });
+    }
+    if (sessions.get(sessionId) === session) {
+      sessions.delete(sessionId);
+      sendToWindow('pty-exit', { sessionId, exitCode });
+    }
+  });
+
+  return { ok: true, shell: path.basename(file) };
 });
 
-ipcMain.on('switch-session', (event, sessionId) => {
-  // Simplemente asegurarse de que el prompt está actualizado
-  if (sessions[sessionId]) {
-    sendPromptForSession(sessionId);
+ipcMain.on('pty-write', (event, { sessionId, data }) => {
+  const session = sessions.get(sessionId);
+  if (session && typeof data === 'string') {
+    session.pty.write(data);
   }
 });
 
-ipcMain.on('close-session', (event, sessionId) => {
+ipcMain.on('pty-resize', (event, { sessionId, cols, rows }) => {
+  const session = sessions.get(sessionId);
+  if (session && validSize(cols) && validSize(rows)) {
+    try {
+      session.pty.resize(cols, rows);
+    } catch (_error) {
+      // La shell terminó entre medias
+    }
+  }
+});
+
+ipcMain.on('pty-kill', (event, sessionId) => {
   closeSession(sessionId);
 });
 
-ipcMain.handle('interrupt-session', (event, sessionId) => interruptSession(sessionId));
-
-// Recibir comandos del renderer, ahora con sesiones
-ipcMain.on('terminal-command', (event, { command, sessionId }) => {
-  // Verificar que la sesión existe
-  if (!sessions[sessionId]) {
-    console.error(`Sesión ${sessionId} no encontrada`);
-    return;
-  }
-
-  // Guardar comando en el historial de la sesión
-  sessions[sessionId].history.push(command);
-
-  // Obtener el directorio actual de la sesión
-  const currentDirectory = sessions[sessionId].directory;
-
-  // Manejar cambio de directorio especialmente
-  // (en Unix, "cd" sin argumentos lleva al home; en Windows muestra el directorio actual, más abajo)
-  if (command.trim().startsWith('cd ') || (process.platform !== 'win32' && command.trim() === 'cd')) {
-    // Quitar comillas envolventes: cd "Mis proyectos"
-    const targetDir = command
-      .trim()
-      .substring(2)
-      .trim()
-      .replace(/^(["'])(.*)\1$/, '$2');
-
-    try {
-      // ~ y ~/ruta → home; el resto (relativas, absolutas, C:/ con barras normales, ..) con path.resolve
-      let newDir;
-      if (targetDir === '' || targetDir === '~') {
-        newDir = os.homedir();
-      } else if (/^~[\\/]/.test(targetDir)) {
-        newDir = path.join(os.homedir(), targetDir.substring(2));
-      } else {
-        newDir = path.resolve(currentDirectory, targetDir);
-      }
-
-      // Verificar que existe y es un directorio (con un archivo, los comandos siguientes fallarían)
-      if (fs.existsSync(newDir) && fs.statSync(newDir).isDirectory()) {
-        sessions[sessionId].directory = newDir;
-        mainWindow.webContents.send('terminal-output', { sessionId, output: `Directorio cambiado a: ${newDir}` });
-      } else {
-        mainWindow.webContents.send('terminal-output', {
-          sessionId,
-          output: `Error: No existe el directorio: ${newDir}`,
-        });
-      }
-
-      // Actualizar prompt después del cambio de directorio
-      sendPromptForSession(sessionId);
-      return;
-    } catch (error) {
-      mainWindow.webContents.send('terminal-output', {
-        sessionId,
-        output: `Error al cambiar directorio: ${error.message}`,
-      });
-      sendPromptForSession(sessionId);
-      return;
-    }
-  }
-
-  // Manejar comando clear especialmente
-  if (command.trim() === 'clear' || command.trim() === 'cls') {
-    mainWindow.webContents.send('terminal-clear', { sessionId });
-    sendPromptForSession(sessionId);
-    return;
-  }
-
-  // Para comandos pwd o dir, mostrar el directorio actual directamente
-  if (command.trim() === 'pwd' || (process.platform === 'win32' && command.trim() === 'cd')) {
-    mainWindow.webContents.send('terminal-output', { sessionId, output: currentDirectory });
-    sendPromptForSession(sessionId);
-    return;
-  }
-
-  // Ejecutar en el directorio actual con streaming de output en tiempo real.
-  // En Windows la salida redirigida usa la página de códigos OEM (850 en español): se fuerza UTF-8
-  // para que tildes, eñes y símbolos lleguen bien. El comando va en una variable de entorno para
-  // que los errores de PowerShell muestren la posición dentro del comando del usuario.
-  const [cmd, ...spawnArgs] =
-    process.platform === 'win32'
-      ? [
-          'powershell.exe',
-          '-Command',
-          '[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; Invoke-Expression $env:HYPE_COMMAND',
-        ]
-      : ['bash', '-c', command];
-
-  const proc = spawn(cmd, spawnArgs, {
-    cwd: currentDirectory,
-    env: process.platform === 'win32' ? { ...process.env, HYPE_COMMAND: command } : process.env,
-    windowsHide: true,
-    // En Unix, grupo de procesos propio para poder interrumpir el comando con todos sus hijos
-    detached: process.platform !== 'win32',
-  });
-
-  // Decodificar como texto con estado: un carácter multibyte partido entre dos trozos no se corrompe
-  proc.stdout.setEncoding('utf8');
-  proc.stderr.setEncoding('utf8');
-
-  sessions[sessionId].processes.add(proc);
-
-  proc.stdout.on('data', data => {
-    if (mainWindow) {
-      mainWindow.webContents.send('terminal-output', { sessionId, output: data });
-    }
-  });
-
-  proc.stderr.on('data', data => {
-    if (mainWindow) {
-      mainWindow.webContents.send('terminal-output', { sessionId, output: data });
-    }
-  });
-
-  proc.on('error', err => {
-    console.error(`Error en proceso: ${err}`);
-    if (mainWindow) {
-      mainWindow.webContents.send('terminal-output', { sessionId, output: `Error: ${err.message}\n` });
-    }
-    if (sessions[sessionId]) {
-      sessions[sessionId].processes.delete(proc);
-    }
-    sendPromptForSession(sessionId);
-  });
-
-  proc.on('close', () => {
-    if (sessions[sessionId]) {
-      sessions[sessionId].processes.delete(proc);
-    }
-    sendPromptForSession(sessionId);
-  });
-});
-
-// Función para enviar el prompt de una sesión específica
-function sendPromptForSession(sessionId) {
-  if (!mainWindow || !sessions[sessionId]) {
-    return;
-  }
-
-  const sessionDir = sessions[sessionId].directory;
-  // Abreviar el home con ~ solo si es el home o está dentro (no C:\Users\Carlos2 → ~2)
-  const home = os.homedir();
-  const displayDir =
-    sessionDir === home || sessionDir.startsWith(home + path.sep)
-      ? '~' + sessionDir.substring(home.length)
-      : sessionDir;
-  const prompt =
-    process.platform === 'win32' ? `PS ${displayDir}> ` : `${os.userInfo().username}@${os.hostname()}:${displayDir}$ `;
-
-  mainWindow.webContents.send('terminal-prompt', { sessionId, prompt });
-}
-
-// Configurar el autocompletado para manejar sesiones
-ipcMain.handle('terminal-autocomplete', async (event, { partial, sessionId }) => {
-  try {
-    // Verificar que la sesión existe
-    if (!sessions[sessionId]) {
-      console.error(`Sesión ${sessionId} no encontrada para autocompletar`);
-      return [];
-    }
-
-    // Obtener el directorio actual de la sesión
-    const currentDirectory = sessions[sessionId].directory;
-
-    // Si comienza con cd, intentamos completar directorios
-    if (partial.startsWith('cd ')) {
-      const pathToComplete = partial.substring(3);
-      return await getDirectoryCompletions(pathToComplete, currentDirectory);
-    }
-
-    // Si no es cd, completamos con los comandos comunes o archivos/directorios
-    // Primero, intentar completar archivos/directorios en el directorio actual
-    const fileCompletions = await getFileCompletions(partial, currentDirectory);
-    if (fileCompletions.length > 0) {
-      return fileCompletions;
-    }
-
-    // Si no hay coincidencias, ofrecer comandos comunes que coincidan
-    const commonCommands = ['ls', 'cd', 'pwd', 'echo', 'cat', 'grep', 'mkdir', 'rm', 'mv', 'cp', 'clear'];
-    return commonCommands.filter(cmd => cmd.startsWith(partial));
-  } catch (error) {
-    console.error('Error en autocompletado:', error);
-    return [];
+ipcMain.on('clipboard-copy', (event, text) => {
+  if (typeof text === 'string') {
+    clipboard.writeText(text);
   }
 });
 
-// Función para obtener completaciones de directorios
-async function getDirectoryCompletions(pathToComplete, currentDirectory) {
-  try {
-    const { promisify } = require('util');
-    const readdir = promisify(fs.readdir);
-    const stat = promisify(fs.stat);
-
-    // Determinar la ruta base y el patrón a completar
-    let basePath, pattern;
-    if (pathToComplete.includes('/') || (process.platform === 'win32' && pathToComplete.includes('\\'))) {
-      const lastSepIndex = Math.max(
-        pathToComplete.lastIndexOf('/'),
-        process.platform === 'win32' ? pathToComplete.lastIndexOf('\\') : -1
-      );
-      basePath = pathToComplete.substring(0, lastSepIndex + 1);
-      pattern = pathToComplete.substring(lastSepIndex + 1);
-
-      // Manejar rutas absolutas y relativas
-      if (!path.isAbsolute(basePath)) {
-        basePath = path.join(currentDirectory, basePath);
-      }
-    } else {
-      basePath = currentDirectory;
-      pattern = pathToComplete;
-    }
-
-    // Si es una tilde, expandir al home
-    if (basePath.startsWith('~')) {
-      basePath = basePath.replace(/^~/, os.homedir());
-    }
-
-    // Listar directorios y filtrar por el patrón
-    let entries;
-    try {
-      entries = await readdir(basePath);
-    } catch (_error) {
-      // Si no se puede leer el directorio, devolver una lista vacía
-      return [];
-    }
-
-    // Filtrar por el patrón y solo incluir directorios
-    const completions = [];
-    for (const entry of entries) {
-      if (entry.startsWith(pattern)) {
-        try {
-          const fullPath = path.join(basePath, entry);
-          const stats = await stat(fullPath);
-          if (stats.isDirectory()) {
-            completions.push(`cd ${entry}${path.sep}`); // Añadir separador de path al final
-          }
-        } catch (_error) {
-          // Ignorar entradas que no se pueden stat
-        }
-      }
-    }
-
-    return completions;
-  } catch (error) {
-    console.error('Error al completar directorios:', error);
-    return [];
-  }
-}
-
-// Función para obtener completaciones de archivos y directorios
-async function getFileCompletions(partial, currentDirectory) {
-  try {
-    const { promisify } = require('util');
-    const readdir = promisify(fs.readdir);
-
-    // Lista de archivos y directorios
-    let entries;
-    try {
-      entries = await readdir(currentDirectory);
-    } catch (_error) {
-      return [];
-    }
-
-    // Filtrar por el patrón
-    return entries.filter(entry => entry.startsWith(partial)).map(entry => entry);
-  } catch (error) {
-    console.error('Error al completar archivos:', error);
-    return [];
-  }
-}
+ipcMain.on('clipboard-paste', event => {
+  event.sender.paste();
+});
 
 app.on('ready', createWindow);
+
+app.on('before-quit', closeAllSessions);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
