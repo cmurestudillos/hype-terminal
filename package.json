@@ -1,6 +1,6 @@
 {
   "name": "hype-terminal",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Una aplicación de terminal creada con Electron",
   "main": "main.js",
   "scripts": {
