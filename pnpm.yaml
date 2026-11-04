@@ -1,4 +1,0 @@
-onlyBuiltDependencies:
-  - electron
-overrides:
-  tmp: "~0.2.6"
