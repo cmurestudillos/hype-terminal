@@ -109,13 +109,14 @@ Tras regenerarlas, comprueba la web en escritorio (claro/oscuro) y en móvil ant
 Los instaladores los genera GitHub Actions (`.github/workflows/release.yml`) al subir un tag `vX.Y.Z`:
 
 ```bash
-# 1. Subir la versión en package.json y hacer commit en develop
-# 2. Crear el tag (debe coincidir con package.json; el workflow lo comprueba)
-git tag -a v1.2.0 -m "v1.2.0"
+# 1. Subir la versión en package.json (y el texto por defecto de docs/index.html) en una rama
+#    y fusionarla en master mediante un pull request
+# 2. Crear el tag en master actualizado (debe coincidir con package.json; el workflow lo comprueba)
+git checkout master && git pull
+git tag -a vX.Y.Z -m "vX.Y.Z"
 
-# 3. Subir rama y tag (el tag lanza el workflow)
-git push origin develop
-git push origin v1.2.0
+# 3. Subir el tag (lanza el workflow)
+git push origin vX.Y.Z
 ```
 
 En unos 10 minutos aparece en _Actions_ el workflow **Release** con 4 jobs (borrador + Windows + macOS + Linux) y un
