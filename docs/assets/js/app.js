@@ -188,9 +188,12 @@
       const data = await res.json();
 
       // Las primeras releases usaban tags como v1.0.0.0: se muestran como semver (v1.0.0)
-      const tag = (data.tag_name || 'v1.2.1').replace(/^(v?\d+\.\d+\.\d+)\.0$/, '$1');
-      document.getElementById('releaseTag').textContent = tag;
-      document.getElementById('heroVersion').textContent = tag;
+      // Sin tag_name se mantiene la versión escrita en el HTML
+      if (data.tag_name) {
+        const tag = data.tag_name.replace(/^(v?\d+\.\d+\.\d+)\.0$/, '$1');
+        document.getElementById('releaseTag').textContent = tag;
+        document.getElementById('heroVersion').textContent = tag;
+      }
 
       if (data.published_at) {
         const fecha = new Date(data.published_at).toLocaleDateString('es-ES', {
